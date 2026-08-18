@@ -28,6 +28,7 @@ function Shell() {
   return user ? <Dashboard /> : <Landing />;
 }
 
+
 function Index() {
   return (
     <BestreadsProvider>

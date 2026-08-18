@@ -123,7 +123,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   const [books, setBooks] = useState<Book[]>([]);
   const [authors, setAuthors] = useState<Author[]>(AUTHORS);
 
-    const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [drafts, setDrafts] = useState<Draft[]>([]);
   const [filter, setFilter] = useState<TimeFilter>("today");
   const [genreSlots, setGenreSlots] = useState<(string | null)[]>(["#POETRY", "#FICTION", "#NOIR"]);
   const [search, setSearch] = useState("");
@@ -144,23 +144,42 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     setHofFeatures((prev) => prev.map((f) => (f.authorId === authorId ? { ...f, media } : f)));
   }, []);
 
-  const loadProfile = useCallback(async (userId: string) => {
+  const loadProfile = useCallback(async (authUser: { id: string; email?: string | null; user_metadata?: Record<string, string> }) => {
     try {
-      const { data, error } = await supabase
+      const meta = authUser.user_metadata ?? {};
+      const resolvedName = (meta.name as string | undefined) ?? authUser.email ?? "Reader";
+      const resolvedUsername = (meta.username as string | undefined) ?? authUser.email?.split("@")[0] ?? "user";
+
+      // Always upsert so the foreign key row is guaranteed to exist
+      // before any insert into `publications` is attempted.
+      const { data: upserted, error: upsertError } = await supabase
         .from("users")
+        .upsert(
+          {
+            id: authUser.id,
+            name: resolvedName,
+            username: resolvedUsername,
+            payment_tier_status: "free",
+          },
+          {
+            onConflict: "id",           // update the existing row if it's already there
+            ignoreDuplicates: false,    // always refresh name/username if they changed
+          },
+        )
         .select("id, name, username, payment_tier_status")
-        .eq("id", userId)
         .maybeSingle();
-      if (error) {
-        console.error("Failed to load profile:", error);
-        return;
+
+      if (upsertError) {
+        console.error("Failed to upsert users row:", upsertError);
       }
-      if (!data) return;
+
+      // Prefer the upserted row's data (may have been set to "pro" outside the app)
+      const row = upserted;
       setUser({
-        id: data.id,
-        name: data.name,
-        username: data.username,
-        tier: data.payment_tier_status === "pro" ? "pro" : "free",
+        id: authUser.id,
+        name: row?.name ?? resolvedName,
+        username: row?.username ?? resolvedUsername,
+        tier: row?.payment_tier_status === "pro" ? "pro" : "free",
         isHallOfFameEditor: false,
       });
     } catch (e) {
@@ -169,17 +188,31 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Attach listener FIRST so we never miss events
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        void loadProfile(session.user.id);
+        void loadProfile(session.user);
       } else {
         setUser(null);
+        if (event === "SIGNED_OUT") setAuthLoading(false);
       }
     });
-    void supabase.auth.getSession().then(async ({ data }) => {
-      if (data.session?.user) await loadProfile(data.session.user.id);
-      setAuthLoading(false);
-    });
+
+    // Then check for an already-existing session (page refresh case)
+    supabase.auth
+      .getSession()
+      .then(async ({ data, error }) => {
+        if (error) console.error("getSession error:", error);
+        if (data.session?.user) {
+          await loadProfile(data.session.user);
+        }
+        setAuthLoading(false);
+      })
+      .catch((e) => {
+        console.error("getSession threw:", e);
+        setAuthLoading(false);
+      });
+
     return () => sub.subscription.unsubscribe();
   }, [loadProfile]);
 
@@ -307,7 +340,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       }
 
       const { data: session } = await supabase.auth.getSession();
-      if (session.session?.user) await loadProfile(session.session.user.id);
+      if (session.session?.user) await loadProfile(session.session.user);
       return { ok: true };
     },
     [loadProfile],
@@ -320,7 +353,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         password,
       });
       if (error) return { ok: false, error: error.message };
-      if (data.user) await loadProfile(data.user.id);
+      if (data.user) await loadProfile(data.user);
       return { ok: true };
     },
     [loadProfile],
@@ -342,14 +375,14 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         prev.map((b) =>
           b.id === bookId
             ? {
-                ...b,
-                totalUpvotes: Math.max(0, b.totalUpvotes + delta),
-                upvotes: {
-                  today: Math.max(0, b.upvotes.today + delta),
-                  week: Math.max(0, b.upvotes.week + delta),
-                  month: Math.max(0, b.upvotes.month + delta),
-                },
-              }
+              ...b,
+              totalUpvotes: Math.max(0, b.totalUpvotes + delta),
+              upvotes: {
+                today: Math.max(0, b.upvotes.today + delta),
+                week: Math.max(0, b.upvotes.week + delta),
+                month: Math.max(0, b.upvotes.month + delta),
+              },
+            }
             : b,
         ),
       );
@@ -472,7 +505,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     }
     if (activeGenre) list = list.filter((b) => b.hashtags.includes(activeGenre));
     if (user?.tier === "pro" && maxPages) list = list.filter((b) => b.pages <= maxPages);
-    
+
     // Sort logic for profile/feed
     return [...list].sort((a, b) => {
       if (profileSort === "oldest") return new Date(a.launchDate).getTime() - new Date(b.launchDate).getTime();

@@ -60,11 +60,14 @@ ALTER TABLE public.trophy_claims ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
 CREATE POLICY "Users are viewable by everyone" ON public.users FOR SELECT USING (true);
+-- INSERT: needed for upsert on login/signup (auth.uid() = id ensures users can only create their own row)
+CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
 
 CREATE POLICY "Publications are viewable by everyone" ON public.publications FOR SELECT USING (true);
 CREATE POLICY "Users can insert their own publications" ON public.publications FOR INSERT WITH CHECK (auth.uid() = author_id);
 CREATE POLICY "Users can update their own publications" ON public.publications FOR UPDATE USING (auth.uid() = author_id);
+CREATE POLICY "Users can delete their own publications" ON public.publications FOR DELETE USING (auth.uid() = author_id);
 
 CREATE POLICY "Upvotes ledger viewable by everyone" ON public.upvotes_ledger FOR SELECT USING (true);
 CREATE POLICY "Users can insert their own upvotes" ON public.upvotes_ledger FOR INSERT WITH CHECK (auth.uid() = user_id);
@@ -72,3 +75,9 @@ CREATE POLICY "Users can delete their own upvotes" ON public.upvotes_ledger FOR 
 
 CREATE POLICY "Users can view their own trophy claims" ON public.trophy_claims FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Users can insert their own trophy claims" ON public.trophy_claims FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- ─── PATCH: if you already ran migration.sql, run only these two lines ──────
+-- ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
+-- ─────────────────────────────────────────────────────────────────────────────
+
