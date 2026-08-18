@@ -75,6 +75,8 @@ type Store = {
   proSortEnabled: boolean;
   maxPages: number | null;
   activeGenre: string | null;
+  profileSort: "most-voted" | "oldest" | "newest";
+  setProfileSort: (s: "most-voted" | "oldest" | "newest") => void;
   hofEditorCount: number;
   hofFeatures: HofFeature[];
   authLoading: boolean;
@@ -134,6 +136,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   const [library, setLibrary] = useState<string[]>(["b1", "b4"]);
   const [maxPages, setMaxPages] = useState<number | null>(null);
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
+  const [profileSort, setProfileSort] = useState<"most-voted" | "oldest" | "newest">("most-voted");
   const [hofEditorCount, setHofEditorCount] = useState(0);
   const [hofFeatures, setHofFeatures] = useState<HofFeature[]>(HOF_FEATURES);
 
@@ -142,19 +145,27 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const loadProfile = useCallback(async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, name, username, tier, is_hall_of_fame_editor")
-      .eq("id", userId)
-      .maybeSingle();
-    if (!data) return;
-    setUser({
-      id: data.id,
-      name: data.name,
-      username: data.username,
-      tier: data.tier === "pro" ? "pro" : "free",
-      isHallOfFameEditor: data.is_hall_of_fame_editor,
-    });
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("id, name, username, payment_tier_status")
+        .eq("id", userId)
+        .maybeSingle();
+      if (error) {
+        console.error("Failed to load profile:", error);
+        return;
+      }
+      if (!data) return;
+      setUser({
+        id: data.id,
+        name: data.name,
+        username: data.username,
+        tier: data.payment_tier_status === "pro" ? "pro" : "free",
+        isHallOfFameEditor: false,
+      });
+    } catch (e) {
+      console.error("Error loading profile:", e);
+    }
   }, []);
 
   useEffect(() => {
@@ -174,61 +185,72 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void supabase
-      .from("profiles")
+      .from("users")
       .select("id", { count: "exact", head: true })
-      .eq("is_hall_of_fame_editor", true)
-      .then(({ count }) => setHofEditorCount(count ?? 0));
+      .eq("payment_tier_status", "pro")
+      .then(({ count }) => setHofEditorCount(count ?? 0))
+      .catch((e) => console.error("Error fetching hofEditorCount:", e));
   }, [user]);
 
   const refreshBooks = useCallback(async () => {
-    const [{ data: rows }, { data: people }] = await Promise.all([
-      supabase
-        .from("books")
-        .select(
-          "id, author_id, title, summary, content, hashtags, cover, cover_url, pages, upvotes_count, reads_count, status, created_at",
-        )
-        .eq("status", "published")
-        .order("upvotes_count", { ascending: false }),
-      supabase.from("profiles").select("id, name, username, tier, is_hall_of_fame_editor"),
-    ]);
+    try {
+      const [publicationsRes, usersRes] = await Promise.all([
+        supabase
+          .from("publications")
+          .select(
+            "id, author_id, title, summary, content, hashtags, cover_url, pages, upvotes_count, reads_count, status, created_at, pan_settings",
+          )
+          .eq("status", "published")
+          .order("upvotes_count", { ascending: false }),
+        supabase.from("users").select("id, name, username, payment_tier_status, biography"),
+      ]);
 
-    if (people) {
-      const mapped: Author[] = people.map((p) => ({
-        id: p.id,
-        name: p.name,
-        username: p.username,
-        bio: "",
-        isPro: p.tier === "pro",
-        isHallOfFameEditor: p.is_hall_of_fame_editor,
-      }));
-      registerAuthors(mapped);
-      setAuthors(mapped);
+      if (publicationsRes.error) console.error("Error fetching publications:", publicationsRes.error);
+      if (usersRes.error) console.error("Error fetching users:", usersRes.error);
+
+      const rows = publicationsRes.data ?? [];
+      const people = usersRes.data ?? [];
+
+      if (people.length > 0) {
+        const mapped: Author[] = people.map((p) => ({
+          id: p.id,
+          name: p.name,
+          username: p.username,
+          bio: p.biography ?? "",
+          isPro: p.payment_tier_status === "pro",
+          isHallOfFameEditor: false,
+        }));
+        registerAuthors(mapped);
+        setAuthors(mapped);
+      }
+
+      setBooks(
+        rows.map((r) => ({
+          id: r.id,
+          authorId: r.author_id,
+          title: r.title,
+          summary: r.summary,
+          hashtags: r.hashtags ?? [],
+          excerpt: (r.content ?? "").slice(0, 240),
+          pages: r.pages ?? 0,
+          cover: 1, // default or map from pan_settings if needed
+          coverImage: r.cover_url ?? undefined,
+          launchDate: r.created_at,
+          status: "published" as const,
+          upvotes: {
+            today: r.upvotes_count ?? 0,
+            week: r.upvotes_count ?? 0,
+            month: r.upvotes_count ?? 0,
+          },
+          totalUpvotes: r.upvotes_count ?? 0,
+          views: r.reads_count ?? 0,
+          shares: 0,
+          currentReads: 0,
+        })),
+      );
+    } catch (e) {
+      console.error("Error refreshing books:", e);
     }
-
-    setBooks(
-      (rows ?? []).map((r) => ({
-        id: r.id,
-        authorId: r.author_id,
-        title: r.title,
-        summary: r.summary,
-        hashtags: r.hashtags ?? [],
-        excerpt: (r.content ?? "").slice(0, 240),
-        pages: r.pages,
-        cover: r.cover,
-        coverImage: r.cover_url ?? undefined,
-        launchDate: r.created_at,
-        status: "published" as const,
-        upvotes: {
-          today: r.upvotes_count,
-          week: r.upvotes_count,
-          month: r.upvotes_count,
-        },
-        totalUpvotes: r.upvotes_count,
-        views: r.reads_count,
-        shares: 0,
-        currentReads: 0,
-      })),
-    );
   }, []);
 
   useEffect(() => {
@@ -241,10 +263,11 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       return;
     }
     void supabase
-      .from("upvotes")
-      .select("book_id")
+      .from("upvotes_ledger")
+      .select("publication_id")
       .eq("user_id", user.id)
-      .then(({ data }) => setUpvoted((data ?? []).map((u) => u.book_id)));
+      .then(({ data }) => setUpvoted((data ?? []).map((u) => u.publication_id)))
+      .catch((e) => console.error("Error fetching upvotes:", e));
   }, [user]);
 
   const signUp = useCallback(
@@ -332,9 +355,9 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       );
       void (async () => {
         if (has) {
-          await supabase.from("upvotes").delete().eq("user_id", user.id).eq("book_id", bookId);
+          await supabase.from("upvotes_ledger").delete().eq("user_id", user.id).eq("publication_id", bookId);
         } else {
-          await supabase.from("upvotes").insert({ user_id: user.id, book_id: bookId });
+          await supabase.from("upvotes_ledger").insert({ user_id: user.id, publication_id: bookId, session_id: "anon" });
         }
       })();
     },
@@ -344,10 +367,14 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   const upvoteCount = useCallback((book: Book) => book.upvotes[filter], [filter]);
 
   const toggleFollow = useCallback((authorId: string) => {
+    if (user?.id === authorId) {
+      toast.error("You cannot follow yourself.");
+      return;
+    }
     setFollowing((prev) =>
       prev.includes(authorId) ? prev.filter((id) => id !== authorId) : [...prev, authorId],
     );
-  }, []);
+  }, [user]);
 
   const toggleLibrary = useCallback(
     (bookId: string) => {
@@ -383,13 +410,12 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     async (d: Omit<Draft, "id" | "createdAt" | "status">): Promise<AuthResult> => {
       if (!user) return { ok: false, error: "Sign in to publish." };
       if (!d.title.trim()) return { ok: false, error: "Your text needs a title." };
-      const { error } = await supabase.from("books").insert({
+      const { error } = await supabase.from("publications").insert({
         author_id: user.id,
         title: d.title.trim(),
         summary: d.summary,
         content: d.body,
         hashtags: d.hashtags,
-        cover: d.cover,
         cover_url: d.coverImage ?? null,
         pages: Math.max(1, Math.ceil((d.body.length || 1) / 900)),
         status: "published",
@@ -446,8 +472,14 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     }
     if (activeGenre) list = list.filter((b) => b.hashtags.includes(activeGenre));
     if (user?.tier === "pro" && maxPages) list = list.filter((b) => b.pages <= maxPages);
-    return [...list].sort((a, b) => b.upvotes[filter] - a.upvotes[filter]);
-  }, [books, search, filter, user, maxPages, activeGenre]);
+    
+    // Sort logic for profile/feed
+    return [...list].sort((a, b) => {
+      if (profileSort === "oldest") return new Date(a.launchDate).getTime() - new Date(b.launchDate).getTime();
+      if (profileSort === "newest") return new Date(b.launchDate).getTime() - new Date(a.launchDate).getTime();
+      return b.upvotes[filter] - a.upvotes[filter]; // most-voted default
+    });
+  }, [books, search, filter, user, maxPages, activeGenre, profileSort]);
 
   const topTen = useMemo(() => visibleBooks.slice(0, 10), [visibleBooks]);
   const streamBooksBase = useMemo(
@@ -495,6 +527,8 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     proSortEnabled: user?.tier === "pro",
     maxPages,
     activeGenre,
+    profileSort,
+    setProfileSort,
     hofEditorCount,
     hofFeatures,
     authLoading,

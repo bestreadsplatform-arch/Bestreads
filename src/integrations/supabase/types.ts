@@ -14,124 +14,174 @@ export type Database = {
   }
   public: {
     Tables: {
-      books: {
+      publications: {
         Row: {
           author_id: string
           content: string
-          cover: number
           cover_url: string | null
           created_at: string
-          hashtags: string[]
+          hashtags: string[] | null
           id: string
-          pages: number
-          reads_count: number
-          status: string
-          summary: string
+          pages: number | null
+          reads_count: number | null
+          status: string | null
+          summary: string | null
           title: string
-          upvotes_count: number
+          upvotes_count: number | null
+          pan_settings: Json | null
         }
         Insert: {
           author_id: string
-          content?: string
-          cover?: number
+          content: string
           cover_url?: string | null
           created_at?: string
-          hashtags?: string[]
+          hashtags?: string[] | null
           id?: string
-          pages?: number
-          reads_count?: number
-          status?: string
-          summary?: string
+          pages?: number | null
+          reads_count?: number | null
+          status?: string | null
+          summary?: string | null
           title: string
-          upvotes_count?: number
+          upvotes_count?: number | null
+          pan_settings?: Json | null
         }
         Update: {
           author_id?: string
           content?: string
-          cover?: number
           cover_url?: string | null
           created_at?: string
-          hashtags?: string[]
+          hashtags?: string[] | null
           id?: string
-          pages?: number
-          reads_count?: number
-          status?: string
-          summary?: string
+          pages?: number | null
+          reads_count?: number | null
+          status?: string | null
+          summary?: string | null
           title?: string
-          upvotes_count?: number
+          upvotes_count?: number | null
+          pan_settings?: Json | null
         }
         Relationships: [
           {
-            foreignKeyName: "books_author_id_fkey"
+            foreignKeyName: "publications_author_id_fkey"
             columns: ["author_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
       }
-      profiles: {
+      users: {
         Row: {
-          created_at: string
-          email: string | null
+          biography: string | null
+          created_at: string | null
+          external_links: Json | null
+          followers_count: number | null
+          following_count: number | null
           id: string
-          is_hall_of_fame_editor: boolean
           name: string
-          tier: string
+          payment_tier_status: string | null
           username: string
         }
         Insert: {
-          created_at?: string
-          email?: string | null
-          id: string
-          is_hall_of_fame_editor?: boolean
-          name?: string
-          tier?: string
+          biography?: string | null
+          created_at?: string | null
+          external_links?: Json | null
+          followers_count?: number | null
+          following_count?: number | null
+          id?: string
+          name: string
+          payment_tier_status?: string | null
           username: string
         }
         Update: {
-          created_at?: string
-          email?: string | null
+          biography?: string | null
+          created_at?: string | null
+          external_links?: Json | null
+          followers_count?: number | null
+          following_count?: number | null
           id?: string
-          is_hall_of_fame_editor?: boolean
           name?: string
-          tier?: string
+          payment_tier_status?: string | null
           username?: string
         }
         Relationships: []
       }
-      upvotes: {
+      upvotes_ledger: {
         Row: {
-          book_id: string
-          created_at: string
+          created_at: string | null
           id: string
+          publication_id: string
+          session_id: string
           user_id: string
         }
         Insert: {
-          book_id: string
-          created_at?: string
+          created_at?: string | null
           id?: string
+          publication_id: string
+          session_id: string
           user_id: string
         }
         Update: {
-          book_id?: string
-          created_at?: string
+          created_at?: string | null
           id?: string
+          publication_id?: string
+          session_id?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "upvotes_book_id_fkey"
-            columns: ["book_id"]
+            foreignKeyName: "upvotes_ledger_publication_id_fkey"
+            columns: ["publication_id"]
             isOneToOne: false
-            referencedRelation: "books"
+            referencedRelation: "publications"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "upvotes_user_id_fkey"
+            foreignKeyName: "upvotes_ledger_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trophy_claims: {
+        Row: {
+          claimed_at: string | null
+          contact_name: string
+          email: string
+          id: string
+          phone_number: string | null
+          shipping_address: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string | null
+          contact_name: string
+          email: string
+          id?: string
+          phone_number?: string | null
+          shipping_address: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string | null
+          contact_name?: string
+          email?: string
+          id?: string
+          phone_number?: string | null
+          shipping_address?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trophy_claims_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
