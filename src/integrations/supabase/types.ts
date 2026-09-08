@@ -29,6 +29,7 @@ export type Database = {
           title: string
           upvotes_count: number | null
           pan_settings: Json | null
+          buy_link: string | null
         }
         Insert: {
           author_id: string
@@ -44,6 +45,7 @@ export type Database = {
           title: string
           upvotes_count?: number | null
           pan_settings?: Json | null
+          buy_link?: string | null
         }
         Update: {
           author_id?: string
@@ -59,6 +61,7 @@ export type Database = {
           title?: string
           upvotes_count?: number | null
           pan_settings?: Json | null
+          buy_link?: string | null
         }
         Relationships: [
           {
@@ -81,6 +84,7 @@ export type Database = {
           name: string
           payment_tier_status: string | null
           username: string
+          avatar_url: string | null
         }
         Insert: {
           biography?: string | null
@@ -92,6 +96,7 @@ export type Database = {
           name: string
           payment_tier_status?: string | null
           username: string
+          avatar_url?: string | null
         }
         Update: {
           biography?: string | null
@@ -103,6 +108,7 @@ export type Database = {
           name?: string
           payment_tier_status?: string | null
           username?: string
+          avatar_url?: string | null
         }
         Relationships: []
       }

@@ -15,7 +15,7 @@ import { toast } from "sonner";
 
 import { BookCover } from "./BookCover";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { dailySeries, hourlySeries, type Book } from "@/lib/bestreads/data";
 import { useBestreads } from "@/lib/bestreads/store";
 import { cn } from "@/lib/utils";
@@ -135,6 +135,14 @@ export function Bookshelf() {
         </p>
       </header>
 
+      <Tabs defaultValue="studio" className="mb-8">
+        <TabsList>
+          <TabsTrigger value="studio">Studio</TabsTrigger>
+          <TabsTrigger value="saved">Saved for Later</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="studio" className="mt-6 space-y-10">
+
       <section className="mb-10">
         <h2 className="mb-3 text-xs font-semibold tracking-[0.2em] uppercase">Drafts</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -219,7 +227,7 @@ export function Bookshelf() {
             ))}
           </div>
 
-          {user?.tier === "pro" ? (
+          {user?.isPro ? (
             <ProChart book={selected} />
           ) : (
             <>
@@ -237,6 +245,30 @@ export function Bookshelf() {
         </div>
         )}
       </section>
+        </TabsContent>
+
+        <TabsContent value="saved" className="mt-6">
+          {library.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Your library is empty.</p>
+          ) : (
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {books
+                .filter((b) => library.includes(b.id))
+                .map((b) => (
+                  <div key={b.id} className="group flex flex-col gap-2">
+                    <button
+                      className="block transition-transform group-hover:-translate-y-1 duration-300 text-left"
+                    >
+                      <BookCover title={b.title} cover={b.cover} image={b.coverImage} />
+                    </button>
+                    <p className="font-display truncate text-sm font-semibold mt-2">{b.title}</p>
+                    <p className="line-clamp-2 text-xs text-muted-foreground">{b.summary}</p>
+                  </div>
+                ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
 
     </div>

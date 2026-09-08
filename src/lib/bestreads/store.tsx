@@ -23,14 +23,16 @@ import {
   type TimeFilter,
 } from "./data";
 
-export type Tier = "free" | "pro";
-export type View = "discover" | "studio" | "bookshelf" | "hall-of-fame" | "pricing";
+export type Tier = "free" | "pro_monthly" | "pro_annual";
+export type View = "discover" | "studio" | "bookshelf" | "hall-of-fame" | "pricing" | "profile";
 
 export type SessionUser = {
   id: string;
   name: string;
   username: string;
+  avatarUrl?: string;
   tier: Tier;
+  isPro: boolean; // true for both pro_monthly and pro_annual
   isHallOfFameEditor: boolean;
 };
 
@@ -42,6 +44,7 @@ export type Draft = {
   body: string;
   cover: number;
   coverImage?: string | undefined;
+  buyLink?: string | undefined;
   status: "draft" | "published";
   createdAt: string;
 };
@@ -68,20 +71,29 @@ type Store = {
   view: View;
   sidebarOpen: boolean;
   topTenCollapsed: boolean;
-  feedTab: "for-you" | "following";
+  feedTab: "for-you" | "following" | "saved";
   upvoted: string[];
   following: string[];
   library: string[];
   proSortEnabled: boolean;
   maxPages: number | null;
+  minUpvotes: number | null;
   activeGenre: string | null;
   profileSort: "most-voted" | "oldest" | "newest";
   setProfileSort: (s: "most-voted" | "oldest" | "newest") => void;
   hofEditorCount: number;
   hofFeatures: HofFeature[];
   authLoading: boolean;
+  readingBook: Book | null;
+  openReading: (book: Book) => void;
+  closeReading: () => void;
+  viewProfileId: string | null;
+  openProfile: (userId: string) => void;
+  closeProfile: () => void;
   upvoteCount: (book: Book) => number;
   updateHofMedia: (authorId: string, media: HofMedia) => void;
+  updateProfile: (fields: { name?: string; avatarUrl?: string; bio?: string; links?: { gumroad?: string; amazon?: string; twitter?: string } }) => Promise<AuthResult>;
+  upgradeTier: (tier: Tier) => Promise<void>;
   signUp: (input: SignUpInput) => Promise<AuthResult>;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
@@ -92,7 +104,7 @@ type Store = {
   setView: (v: View) => void;
   toggleSidebar: () => void;
   toggleTopTen: () => void;
-  setFeedTab: (t: "for-you" | "following") => void;
+  setFeedTab: (t: "for-you" | "following" | "saved") => void;
   toggleUpvote: (bookId: string) => void;
   toggleFollow: (authorId: string) => void;
   toggleLibrary: (bookId: string) => { ok: boolean; error?: string };
@@ -103,12 +115,14 @@ type Store = {
   refreshBooks: () => Promise<void>;
   deleteDraft: (id: string) => void;
   setMaxPages: (p: number | null) => void;
+  setMinUpvotes: (v: number | null) => void;
   setActiveGenre: (g: string | null) => void;
   availableGenres: string[];
   hashtagSearch: string | null;
   visibleBooks: Book[];
   topTen: Book[];
   streamBooks: Book[];
+  savedBooks: Book[];
   topAuthors: { author: Author; score: number; titles: number }[];
 };
 
@@ -130,15 +144,18 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   const [view, setView] = useState<View>("discover");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [topTenCollapsed, setTopTenCollapsed] = useState(false);
-  const [feedTab, setFeedTab] = useState<"for-you" | "following">("for-you");
+  const [feedTab, setFeedTab] = useState<"for-you" | "following" | "saved">("for-you");
   const [upvoted, setUpvoted] = useState<string[]>([]);
-  const [following, setFollowing] = useState<string[]>(["a3", "a7"]);
-  const [library, setLibrary] = useState<string[]>(["b1", "b4"]);
+  const [following, setFollowing] = useState<string[]>([]);
+  const [library, setLibrary] = useState<string[]>([]);
   const [maxPages, setMaxPages] = useState<number | null>(null);
+  const [minUpvotes, setMinUpvotes] = useState<number | null>(null);
   const [activeGenre, setActiveGenre] = useState<string | null>(null);
   const [profileSort, setProfileSort] = useState<"most-voted" | "oldest" | "newest">("most-voted");
   const [hofEditorCount, setHofEditorCount] = useState(0);
   const [hofFeatures, setHofFeatures] = useState<HofFeature[]>(HOF_FEATURES);
+  const [readingBook, setReadingBook] = useState<Book | null>(null);
+  const [viewProfileId, setViewProfileId] = useState<string | null>(null);
 
   const updateHofMedia = useCallback((authorId: string, media: HofMedia) => {
     setHofFeatures((prev) => prev.map((f) => (f.authorId === authorId ? { ...f, media } : f)));
@@ -150,38 +167,42 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       const resolvedName = (meta.name as string | undefined) ?? authUser.email ?? "Reader";
       const resolvedUsername = (meta.username as string | undefined) ?? authUser.email?.split("@")[0] ?? "user";
 
-      // Always upsert so the foreign key row is guaranteed to exist
-      // before any insert into `publications` is attempted.
       const { data: upserted, error: upsertError } = await supabase
         .from("users")
         .upsert(
-          {
-            id: authUser.id,
-            name: resolvedName,
-            username: resolvedUsername,
-            payment_tier_status: "free",
-          },
-          {
-            onConflict: "id",           // update the existing row if it's already there
-            ignoreDuplicates: false,    // always refresh name/username if they changed
-          },
+          { id: authUser.id, name: resolvedName, username: resolvedUsername, payment_tier_status: "free" },
+          { onConflict: "id", ignoreDuplicates: false },
         )
-        .select("id, name, username, payment_tier_status")
+        .select("id, name, username, payment_tier_status, biography, external_links")
         .maybeSingle();
 
-      if (upsertError) {
-        console.error("Failed to upsert users row:", upsertError);
-      }
+      if (upsertError) console.error("Failed to upsert users row:", upsertError);
 
-      // Prefer the upserted row's data (may have been set to "pro" outside the app)
       const row = upserted;
+      const rawTier = (row?.payment_tier_status ?? "free").toLowerCase();
+      const tier: Tier = rawTier === "pro_annual" ? "pro_annual" : rawTier === "pro_monthly" ? "pro_monthly" : "free";
+      const isPro = tier !== "free";
+      const links = (row?.external_links as { gumroad?: string; amazon?: string; twitter?: string } | null) ?? undefined;
+
       setUser({
         id: authUser.id,
         name: row?.name ?? resolvedName,
         username: row?.username ?? resolvedUsername,
-        tier: row?.payment_tier_status === "pro" ? "pro" : "free",
+        tier,
+        isPro,
         isHallOfFameEditor: false,
       });
+
+      // Update the live author registry with profile data
+      registerAuthors([{
+        id: authUser.id,
+        name: row?.name ?? resolvedName,
+        username: row?.username ?? resolvedUsername,
+        bio: (row?.biography as string | null) ?? "",
+        isPro,
+        isHallOfFameEditor: false,
+        links,
+      }]);
     } catch (e) {
       console.error("Error loading profile:", e);
     }
@@ -250,7 +271,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           name: p.name,
           username: p.username,
           bio: p.biography ?? "",
-          isPro: p.payment_tier_status === "pro",
+          isPro: ["pro_monthly", "pro_annual"].includes((p.payment_tier_status ?? "").toLowerCase()),
           isHallOfFameEditor: false,
         }));
         registerAuthors(mapped);
@@ -262,11 +283,12 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           id: r.id,
           authorId: r.author_id,
           title: r.title,
-          summary: r.summary,
+          summary: r.summary ?? "",
           hashtags: r.hashtags ?? [],
           excerpt: (r.content ?? "").slice(0, 240),
+          content: r.content ?? "",
           pages: r.pages ?? 0,
-          cover: 1, // default or map from pan_settings if needed
+          cover: 1,
           coverImage: r.cover_url ?? undefined,
           launchDate: r.created_at,
           status: "published" as const,
@@ -279,6 +301,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           views: r.reads_count ?? 0,
           shares: 0,
           currentReads: 0,
+          buyLink: (r as Record<string, unknown>).buy_link as string | undefined,
         })),
       );
     } catch (e) {
@@ -415,8 +438,8 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         setLibrary((l) => l.filter((id) => id !== bookId));
         return { ok: true };
       }
-      if (user?.tier === "free" && library.length >= FREE_LIBRARY_LIMIT) {
-        return { ok: false, error: "Free library holds 5 books. Upgrade to Pro for unlimited." };
+      if (!user?.isPro && library.length >= FREE_LIBRARY_LIMIT) {
+        return { ok: false, error: "Upgrade to Pro for an unlimited library." };
       }
       setLibrary((l) => [...l, bookId]);
       return { ok: true };
@@ -427,7 +450,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   const saveDraft = useCallback(
     (d: Omit<Draft, "id" | "createdAt" | "status">) => {
       const currentDrafts = drafts.filter((x) => x.status === "draft");
-      if (user?.tier === "free" && currentDrafts.length >= FREE_DRAFT_LIMIT) {
+      if (!user?.isPro && currentDrafts.length >= FREE_DRAFT_LIMIT) {
         return { ok: false, error: "Free accounts keep 5 drafts. Upgrade to Pro for unlimited." };
       }
       setDrafts((prev) => [
@@ -450,9 +473,10 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         content: d.body,
         hashtags: d.hashtags,
         cover_url: d.coverImage ?? null,
+        buy_link: d.buyLink ?? null,
         pages: Math.max(1, Math.ceil((d.body.length || 1) / 900)),
         status: "published",
-      });
+      } as Record<string, unknown>);
       if (error) return { ok: false, error: error.message };
       await refreshBooks();
       return { ok: true };
@@ -477,8 +501,51 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setTier = useCallback((t: Tier) => {
-    setUser((u) => (u ? { ...u, tier: t } : u));
+    setUser((u) => (u ? { ...u, tier: t, isPro: t !== "free" } : u));
   }, []);
+
+  const upgradeTier = useCallback(async (t: Tier) => {
+    if (!user) return;
+    // Update Supabase
+    const { error } = await supabase
+      .from("users")
+      .update({ payment_tier_status: t })
+      .eq("id", user.id);
+    if (error) console.error("Error updating tier:", error);
+    // Update local state immediately for instant UI feedback
+    setUser((u) => (u ? { ...u, tier: t, isPro: t !== "free" } : u));
+  }, [user]);
+
+  const updateProfile = useCallback(async (fields: {
+    name?: string;
+    avatarUrl?: string;
+    bio?: string;
+    links?: { gumroad?: string; amazon?: string; twitter?: string };
+  }): Promise<AuthResult> => {
+    if (!user) return { ok: false, error: "Not signed in." };
+    const { error } = await supabase
+      .from("users")
+      .update({
+        ...(fields.name ? { name: fields.name } : {}),
+        ...(fields.bio !== undefined ? { biography: fields.bio } : {}),
+        ...(fields.links !== undefined ? { external_links: fields.links } : {}),
+      })
+      .eq("id", user.id);
+    if (error) return { ok: false, error: error.message };
+    setUser((u) => u ? { ...u, ...(fields.name ? { name: fields.name! } : {}), ...(fields.avatarUrl ? { avatarUrl: fields.avatarUrl } : {}) } : u);
+    // Refresh author registry
+    registerAuthors([{
+      id: user.id,
+      name: fields.name ?? user.name,
+      username: user.username,
+      bio: fields.bio ?? "",
+      isPro: user.isPro,
+      isHallOfFameEditor: user.isHallOfFameEditor,
+      avatarUrl: fields.avatarUrl,
+      links: fields.links,
+    }]);
+    return { ok: true };
+  }, [user]);
 
   const setGenreSlot = useCallback((index: number, genre: string | null) => {
     setGenreSlots((prev) => prev.map((g, i) => (i === index ? genre : g)));
@@ -504,15 +571,15 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       );
     }
     if (activeGenre) list = list.filter((b) => b.hashtags.includes(activeGenre));
-    if (user?.tier === "pro" && maxPages) list = list.filter((b) => b.pages <= maxPages);
+    if (user?.isPro && maxPages) list = list.filter((b) => b.pages <= maxPages);
+    if (user?.isPro && minUpvotes) list = list.filter((b) => b.totalUpvotes >= minUpvotes);
 
-    // Sort logic for profile/feed
     return [...list].sort((a, b) => {
       if (profileSort === "oldest") return new Date(a.launchDate).getTime() - new Date(b.launchDate).getTime();
       if (profileSort === "newest") return new Date(b.launchDate).getTime() - new Date(a.launchDate).getTime();
-      return b.upvotes[filter] - a.upvotes[filter]; // most-voted default
+      return b.upvotes[filter] - a.upvotes[filter];
     });
-  }, [books, search, filter, user, maxPages, activeGenre, profileSort]);
+  }, [books, search, filter, user, maxPages, minUpvotes, activeGenre, profileSort]);
 
   const topTen = useMemo(() => visibleBooks.slice(0, 10), [visibleBooks]);
   const streamBooksBase = useMemo(
@@ -525,6 +592,11 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         ? streamBooksBase.filter((b) => following.includes(b.authorId))
         : streamBooksBase,
     [streamBooksBase, feedTab, following],
+  );
+
+  const savedBooks = useMemo(
+    () => books.filter((b) => library.includes(b.id)),
+    [books, library],
   );
 
   const topAuthors = useMemo(() => {
@@ -557,16 +629,25 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     upvoted,
     following,
     library,
-    proSortEnabled: user?.tier === "pro",
+    proSortEnabled: user?.isPro ?? false,
     maxPages,
+    minUpvotes,
     activeGenre,
     profileSort,
     setProfileSort,
     hofEditorCount,
     hofFeatures,
     authLoading,
+    readingBook,
+    openReading: (book) => setReadingBook(book),
+    closeReading: () => setReadingBook(null),
+    viewProfileId,
+    openProfile: (id) => setViewProfileId(id),
+    closeProfile: () => setViewProfileId(null),
     upvoteCount,
     updateHofMedia,
+    updateProfile,
+    upgradeTier,
     signUp,
     signIn,
     signOut,
@@ -588,12 +669,14 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     refreshBooks,
     deleteDraft,
     setMaxPages,
+    setMinUpvotes,
     setActiveGenre,
     availableGenres: GENRES,
     hashtagSearch,
     visibleBooks,
     topTen,
     streamBooks,
+    savedBooks,
     topAuthors,
   };
 

@@ -5,8 +5,10 @@ export type Author = {
   name: string;
   username: string;
   bio: string;
+  avatarUrl?: string;
   isPro: boolean;
   isHallOfFameEditor: boolean;
+  links?: { gumroad?: string; amazon?: string; twitter?: string };
 };
 
 export type Book = {
@@ -16,6 +18,7 @@ export type Book = {
   summary: string;
   hashtags: string[];
   excerpt: string;
+  content: string;
   pages: number;
   cover: number; // palette index 0-9
   coverImage?: string | undefined;
@@ -26,6 +29,7 @@ export type Book = {
   views: number;
   shares: number;
   currentReads: number;
+  buyLink?: string | undefined;
   store?: { amazon?: string; gumroad?: string } | undefined;
 };
 

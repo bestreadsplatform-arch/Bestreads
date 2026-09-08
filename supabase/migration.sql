@@ -10,6 +10,7 @@ CREATE TABLE public.users (
     payment_tier_status TEXT DEFAULT 'free',
     followers_count INTEGER DEFAULT 0,
     following_count INTEGER DEFAULT 0,
+    avatar_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -27,6 +28,7 @@ CREATE TABLE public.publications (
     upvotes_count INTEGER DEFAULT 0,
     reads_count INTEGER DEFAULT 0,
     status TEXT DEFAULT 'published',
+    buy_link TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

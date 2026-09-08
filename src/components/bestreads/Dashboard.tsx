@@ -24,6 +24,8 @@ import { BookCover } from "./BookCover";
 import { Bookshelf } from "./Bookshelf";
 import { HallOfFame } from "./HallOfFame";
 import { Pricing } from "./Pricing";
+import { ProfilePage } from "./ProfilePage";
+import { ReadingModal } from "./ReadingModal";
 import { Studio } from "./Studio";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -132,23 +134,32 @@ function UpvoteButton({ book }: { book: Book }) {
 }
 
 function StreamCard({ book }: { book: Book }) {
-  const { following, toggleFollow, library, toggleLibrary } = useBestreads();
+  const { following, toggleFollow, library, toggleLibrary, openReading, openProfile } = useBestreads();
   const author = authorById(book.authorId);
   const saved = library.includes(book.id);
   return (
     <article className="flex gap-4 border-b border-border px-4 py-5 transition-colors hover:bg-card/60">
       <UpvoteButton book={book} />
-      <div className="w-14 shrink-0">
-        <BookCover title={book.title} cover={book.cover} />
-      </div>
+      <button onClick={() => openReading(book)} className="w-14 shrink-0 hover:opacity-80 transition-opacity">
+        <BookCover title={book.title} cover={book.cover} image={book.coverImage} />
+      </button>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 text-sm">
-          <span className="font-semibold">{author.name}</span>
-          <span className="text-muted-foreground">@{author.username}</span>
+          <button onClick={() => openProfile(author.id)} className="font-semibold hover:underline">
+            {author.name}
+          </button>
+          <button onClick={() => openProfile(author.id)} className="text-muted-foreground hover:underline">
+            @{author.username}
+          </button>
           <BadgeCheck className="size-3.5 text-verified" />
           <span className="text-metric text-xs text-muted-foreground">{book.pages} pages</span>
         </div>
-        <h3 className="font-display mt-1 text-xl font-semibold">{book.title}</h3>
+        <button
+          onClick={() => openReading(book)}
+          className="font-display mt-1 text-xl font-semibold hover:underline text-left"
+        >
+          {book.title}
+        </button>
         <p className="mt-1 text-sm text-muted-foreground">{book.summary}</p>
         <p className="mt-2 text-xs tracking-wide text-muted-foreground">
           {book.hashtags.join("  ")}
@@ -467,7 +478,7 @@ function RightSidebar() {
 }
 
 function Header() {
-  const { search, setSearch, user, setView, signOut, setTier } = useBestreads();
+  const { search, setSearch, user, setView, signOut, openProfile } = useBestreads();
   return (
     <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur">
       <button onClick={() => setView("discover")} className="font-display text-xl font-semibold">
@@ -486,26 +497,23 @@ function Header() {
         <PenLine className="size-4" /> Write Something Human
       </Button>
       <div className="flex items-center gap-2 rounded-full border border-border bg-card px-2 py-1">
-        <div className="flex size-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
-          {user?.name?.[0] ?? "?"}
-        </div>
+        <button
+          onClick={() => { if (user) openProfile(user.id); }}
+          className="flex size-7 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground hover:ring-2 hover:ring-ring transition-all"
+        >
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="Avatar" className="size-full rounded-full object-cover" />
+          ) : (
+            user?.name?.[0] ?? "?"
+          )}
+        </button>
         <div className="hidden sm:block">
           <p className="text-xs leading-tight font-semibold">@{user?.username}</p>
           <p className="text-[0.6rem] tracking-widest text-muted-foreground uppercase">
             {user?.tier} tier
           </p>
         </div>
-        <div className="ml-1 flex items-center gap-1.5 border-l border-border pl-2">
-          <span className="text-[0.6rem] tracking-widest uppercase">Pro</span>
-          <Switch
-            checked={user?.tier === "pro"}
-            onCheckedChange={(v) => {
-              setTier(v ? "pro" : "free");
-              toast(v ? "Testing as Pro account" : "Testing as Free account");
-            }}
-          />
-        </div>
-        <Button variant="ghost" size="icon" onClick={signOut}>
+        <Button variant="ghost" size="icon" onClick={signOut} className="ml-1">
           <LogOut className="size-4" />
         </Button>
       </div>
@@ -531,6 +539,8 @@ export function Dashboard() {
           {view === "discover" ? <RightSidebar /> : null}
         </div>
       </div>
+      <ReadingModal />
+      <ProfilePage />
     </div>
   );
 }

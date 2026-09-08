@@ -109,6 +109,7 @@ export function Studio() {
   const [tags, setTags] = useState<string[]>([]);
   const [body, setBody] = useState("");
   const [coverImage, setCoverImage] = useState<string | undefined>(undefined);
+  const [buyLink, setBuyLink] = useState("");
   const [cropperOpen, setCropperOpen] = useState(false);
 
   const words = useMemo(() => body.trim().split(/\s+/).filter(Boolean).length, [body]);
@@ -130,7 +131,7 @@ export function Studio() {
       toast.error("Your text needs a title.");
       return;
     }
-    const payload = { title, summary, hashtags: tags, body, cover: 2, coverImage };
+    const payload = { title, summary, hashtags: tags, body, cover: 2, coverImage, buyLink: buyLink.trim() || undefined };
     const res = publish ? await publishBook(payload) : saveDraft(payload);
     if (!res.ok) {
       toast.error(res.error ?? "Could not save");
@@ -205,6 +206,19 @@ export function Studio() {
           <Button variant="outline" className="w-full" onClick={() => setCropperOpen(true)}>
             <ImagePlus className="size-4" /> Upload Cover Art
           </Button>
+
+          {user?.isPro && (
+            <div className="space-y-1.5 pt-2">
+              <Label className="text-xs">Buy Book Link (Pro)</Label>
+              <Input
+                value={buyLink}
+                onChange={(e) => setBuyLink(e.target.value)}
+                placeholder="https://gumroad.com/..."
+                className="text-xs"
+              />
+            </div>
+          )}
+
           <Button className="w-full" onClick={() => void persist(true)}>
             <Send className="size-4" /> Publish
           </Button>
