@@ -1,15 +1,17 @@
-import { COVER_PALETTES } from "@/lib/bestreads/data";
+import { COVER_PALETTES, type CoAuthor, authorById } from "@/lib/bestreads/data";
 import { cn } from "@/lib/utils";
 
 export function BookCover({
   title,
   author,
+  coauthors,
   cover,
   image,
   className,
 }: {
   title: string;
   author?: string | undefined;
+  coauthors?: CoAuthor[] | undefined;
   cover: number;
   image?: string | undefined;
   className?: string | undefined;
@@ -38,7 +40,22 @@ export function BookCover({
               {title}
             </h3>
             {author ? (
-              <p className="mt-2 text-[0.6rem] tracking-[0.18em] uppercase opacity-75">{author}</p>
+              <div className="mt-2 space-y-1">
+                <p className="text-[0.6rem] tracking-[0.18em] uppercase opacity-75">
+                  {author}
+                  {coauthors?.some(c => c.role === "principal_author") ? (
+                    <>
+                      {" & "}
+                      {coauthors.filter(c => c.role === "principal_author").map(c => authorById(c.id).name).join(", ")}
+                    </>
+                  ) : null}
+                </p>
+                {coauthors?.some(c => c.role === "helper") && (
+                  <p className="text-[0.5rem] tracking-[0.1em] uppercase opacity-60">
+                    + {coauthors.filter(c => c.role === "helper").map(c => authorById(c.id).name).join(", ")} (Helper)
+                  </p>
+                )}
+              </div>
             ) : null}
           </div>
         </>

@@ -1,3 +1,5 @@
+import type { DocBlock, LiteraryLayout } from "./document";
+
 export type TimeFilter = "today" | "week" | "month";
 
 export type Author = {
@@ -11,17 +13,28 @@ export type Author = {
   links?: { gumroad?: string; amazon?: string; twitter?: string };
 };
 
+export type CoAuthor = {
+  id: string;
+  role: "principal_author" | "helper";
+  fullPermissions: boolean;
+  invitationStatus?: "pending" | "accepted" | "declined";
+};
+
 export type Book = {
   id: string;
   authorId: string;
+  coauthors?: CoAuthor[];
   title: string;
   summary: string;
   hashtags: string[];
   excerpt: string;
   content: string;
+  blocks?: DocBlock[];
+  layout?: LiteraryLayout;
   pages: number;
   cover: number; // palette index 0-9
   coverImage?: string | undefined;
+  bannerImage?: string | undefined;
   launchDate: string;
   status: "published" | "draft";
   upvotes: Record<TimeFilter, number>;
@@ -31,6 +44,26 @@ export type Book = {
   currentReads: number;
   buyLink?: string | undefined;
   store?: { amazon?: string; gumroad?: string } | undefined;
+};
+
+export type InboxItem = {
+  id: string;
+  senderId: string;
+  senderUsername: string;
+  receiverId: string;
+  bookTitle: string;
+  draftId: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: string;
+};
+
+export type Revision = {
+  id: string;
+  publicationId: string;
+  helperId: string;
+  proposedBody: string;
+  status: "pending" | "approved" | "rejected";
+  createdAt: string;
 };
 
 export const HOF_CODE = "thof1856!";

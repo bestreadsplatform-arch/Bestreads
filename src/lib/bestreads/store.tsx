@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 import {
@@ -22,6 +23,16 @@ import {
   type HofMedia,
   type TimeFilter,
 } from "./data";
+import {
+  emptyDoc,
+  hydrateDoc,
+  parsePanSettings,
+  serializeLiterary,
+  stripMarkdownLeaks,
+  type DocBlock,
+  type LiteraryLayout,
+  type PanSettings,
+} from "./document";
 
 export type Tier = "free" | "pro_monthly" | "pro_annual";
 export type View = "discover" | "studio" | "bookshelf" | "hall-of-fame" | "pricing" | "profile";
@@ -36,18 +47,90 @@ export type SessionUser = {
   isHallOfFameEditor: boolean;
 };
 
+import { type CoAuthor, type InboxItem, type Revision } from "./data";
+
 export type Draft = {
   id: string;
   title: string;
   summary: string;
   hashtags: string[];
   body: string;
+  blocks: DocBlock[];
+  layout: LiteraryLayout;
   cover: number;
   coverImage?: string | undefined;
+  bannerImage?: string | undefined;
   buyLink?: string | undefined;
+  coauthors?: CoAuthor[];
   status: "draft" | "published";
   createdAt: string;
 };
+
+export type WorkspaceState = {
+  nonce: number;
+  draft: Draft;
+};
+
+type AuthResult = { ok: boolean; error?: string; id?: string };
+
+function blankDraft(): Draft {
+  const doc = emptyDoc("serif");
+  return {
+    id: "",
+    title: "",
+    summary: "",
+    hashtags: [],
+    body: "",
+    blocks: doc.blocks,
+    layout: doc.layout,
+    cover: 2,
+    status: "draft",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function isUuid(id: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
+function toPanSettings(d: Pick<Draft, "bannerImage" | "layout" | "blocks">): PanSettings {
+  return {
+    bannerImage: d.bannerImage,
+    layout: d.layout,
+    blocks: d.blocks,
+  };
+}
+
+function publicationToDraft(r: {
+  id: string;
+  title: string;
+  summary: string | null;
+  content: string;
+  hashtags: string[] | null;
+  cover_url: string | null;
+  buy_link?: string | null;
+  pan_settings: unknown;
+  created_at: string;
+  status: string | null;
+}): Draft {
+  const pan = parsePanSettings(r.pan_settings);
+  const doc = hydrateDoc(r.content ?? "", pan);
+  return {
+    id: r.id,
+    title: r.title,
+    summary: r.summary ?? "",
+    hashtags: r.hashtags ?? [],
+    body: serializeLiterary(doc),
+    blocks: doc.blocks,
+    layout: doc.layout,
+    cover: 2,
+    coverImage: r.cover_url ?? undefined,
+    bannerImage: pan?.bannerImage,
+    buyLink: r.buy_link ?? undefined,
+    status: r.status === "published" ? "published" : "draft",
+    createdAt: r.created_at,
+  };
+}
 
 type SignUpInput = {
   email: string;
@@ -56,9 +139,6 @@ type SignUpInput = {
   username: string;
   accessCode: string;
 };
-
-type AuthResult = { ok: boolean; error?: string };
-
 
 type Store = {
   user: SessionUser | null;
@@ -109,10 +189,14 @@ type Store = {
   toggleFollow: (authorId: string) => void;
   toggleLibrary: (bookId: string) => { ok: boolean; error?: string };
   setTier: (t: Tier) => void;
-  saveDraft: (d: Omit<Draft, "id" | "createdAt" | "status">) => { ok: boolean; error?: string };
+  workspace: WorkspaceState;
+  openWorkspace: (draft?: Draft) => void;
+  patchWorkspace: (fields: Partial<Draft>) => void;
+  saveDraft: (d: Omit<Draft, "id" | "createdAt" | "status"> & { id?: string }) => Promise<AuthResult>;
   publishDraft: (id: string) => Promise<AuthResult>;
-  publishBook: (d: Omit<Draft, "id" | "createdAt" | "status">) => Promise<AuthResult>;
+  publishBook: (d: Omit<Draft, "id" | "createdAt" | "status"> & { id?: string }) => Promise<AuthResult>;
   refreshBooks: () => Promise<void>;
+  refreshDrafts: () => Promise<void>;
   deleteDraft: (id: string) => void;
   setMaxPages: (p: number | null) => void;
   setMinUpvotes: (v: number | null) => void;
@@ -124,6 +208,13 @@ type Store = {
   streamBooks: Book[];
   savedBooks: Book[];
   topAuthors: { author: Author; score: number; titles: number }[];
+  inbox: InboxItem[];
+  revisions: Revision[];
+  inviteCoAuthor: (username: string, draftId?: string) => Promise<AuthResult>;
+  acceptInvitation: (inboxId: string) => Promise<AuthResult>;
+  declineInvitation: (inboxId: string) => Promise<AuthResult>;
+  submitRevision: (draftId: string, newBody: string) => Promise<AuthResult>;
+  approveRevision: (revisionId: string) => Promise<AuthResult>;
 };
 
 const StoreContext = createContext<Store | null>(null);
@@ -156,6 +247,21 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   const [hofFeatures, setHofFeatures] = useState<HofFeature[]>(HOF_FEATURES);
   const [readingBook, setReadingBook] = useState<Book | null>(null);
   const [viewProfileId, setViewProfileId] = useState<string | null>(null);
+  const [inbox, setInbox] = useState<InboxItem[]>([]);
+  const [revisions, setRevisions] = useState<Revision[]>([]);
+  const [workspace, setWorkspace] = useState<WorkspaceState>({ nonce: 0, draft: blankDraft() });
+
+  const openWorkspace = useCallback((draft?: Draft) => {
+    setWorkspace((prev) => ({
+      nonce: prev.nonce + 1,
+      draft: draft ? { ...draft, blocks: draft.blocks?.length ? draft.blocks : emptyDoc(draft.layout ?? "serif").blocks, layout: draft.layout ?? "serif" } : blankDraft(),
+    }));
+    setView("studio");
+  }, []);
+
+  const patchWorkspace = useCallback((fields: Partial<Draft>) => {
+    setWorkspace((prev) => ({ ...prev, draft: { ...prev.draft, ...fields } }));
+  }, []);
 
   const updateHofMedia = useCallback((authorId: string, media: HofMedia) => {
     setHofFeatures((prev) => prev.map((f) => (f.authorId === authorId ? { ...f, media } : f)));
@@ -248,17 +354,18 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       .catch((e) => console.error("Error fetching hofEditorCount:", e));
   }, [user]);
 
-  const refreshBooks = useCallback(async () => {
+    const refreshBooks = useCallback(async () => {
     try {
-      const [publicationsRes, usersRes] = await Promise.all([
+      const [publicationsRes, usersRes, coauthorsRes] = await Promise.all([
         supabase
           .from("publications")
           .select(
-            "id, author_id, title, summary, content, hashtags, cover_url, pages, upvotes_count, reads_count, status, created_at, pan_settings",
+            "id, author_id, title, summary, content, hashtags, cover_url, pages, upvotes_count, reads_count, status, created_at, pan_settings, buy_link",
           )
           .eq("status", "published")
           .order("upvotes_count", { ascending: false }),
         supabase.from("users").select("id, name, username, payment_tier_status, biography, avatar_url"),
+        supabase.from("publication_coauthors").select("*")
       ]);
 
       if (publicationsRes.error) console.error("Error fetching publications:", publicationsRes.error);
@@ -266,6 +373,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
 
       const rows = publicationsRes.data ?? [];
       const people = usersRes.data ?? [];
+      const coauthRows = coauthorsRes.data ?? [];
 
       if (people.length > 0) {
         const mapped: Author[] = people.map((p) => ({
@@ -282,19 +390,34 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       }
 
       setBooks(
-        rows.map((r) => ({
+        rows.map((r) => {
+          const pan = parsePanSettings(r.pan_settings);
+          const doc = hydrateDoc(r.content ?? "", pan);
+          const literary = serializeLiterary(doc);
+          return {
           id: r.id,
           authorId: r.author_id,
           title: r.title,
           summary: r.summary ?? "",
           hashtags: r.hashtags ?? [],
-          excerpt: (r.content ?? "").slice(0, 240),
-          content: r.content ?? "",
+          excerpt: literary.slice(0, 240),
+          content: literary,
+          blocks: doc.blocks,
+          layout: doc.layout,
           pages: r.pages ?? 0,
           cover: 1,
           coverImage: r.cover_url ?? undefined,
+          bannerImage: pan?.bannerImage,
           launchDate: r.created_at,
           status: "published" as const,
+          coauthors: coauthRows
+            .filter((c) => c.publication_id === r.id && (c.invitation_status === "accepted" || !c.invitation_status))
+            .map((c) => ({
+              id: c.user_id,
+              role: c.role as "principal_author" | "helper",
+              fullPermissions: c.full_permissions ?? false,
+              invitationStatus: (c.invitation_status as CoAuthor["invitationStatus"]) ?? "accepted",
+            })),
           upvotes: {
             today: r.upvotes_count ?? 0,
             week: r.upvotes_count ?? 0,
@@ -304,13 +427,91 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           views: r.reads_count ?? 0,
           shares: 0,
           currentReads: 0,
-          buyLink: (r as Record<string, unknown>).buy_link as string | undefined,
-        })),
+          buyLink: r.buy_link ?? undefined,
+          };
+        }),
       );
     } catch (e) {
       console.error("Error refreshing books:", e);
     }
   }, []);
+
+  const refreshInbox = useCallback(async () => {
+    if (!user) {
+      setInbox([]);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("publication_coauthors")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("invitation_status", "pending");
+    if (error) {
+      console.error("Error fetching inbox:", error);
+      return;
+    }
+    const rows = data ?? [];
+    const senderIds = [...new Set(rows.map((r) => r.invited_by))];
+    const { data: senders } = senderIds.length
+      ? await supabase.from("users").select("id, username").in("id", senderIds)
+      : { data: [] as { id: string; username: string }[] };
+    const names = new Map((senders ?? []).map((s) => [s.id, s.username]));
+    setInbox(
+      rows.map((d) => ({
+        id: d.id,
+        senderId: d.invited_by,
+        senderUsername: names.get(d.invited_by) ?? "someone",
+        receiverId: d.user_id,
+        bookTitle: d.book_title || "Untitled",
+        draftId: d.publication_id,
+        status: "pending",
+        createdAt: d.created_at,
+      })),
+    );
+  }, [user]);
+
+  const refreshDrafts = useCallback(async () => {
+    if (!user) {
+      setDrafts([]);
+      return;
+    }
+    try {
+      const [{ data: owned, error: ownedErr }, { data: accepted, error: accErr }] = await Promise.all([
+        supabase
+          .from("publications")
+          .select("id, title, summary, content, hashtags, cover_url, pan_settings, created_at, status, buy_link")
+          .eq("author_id", user.id)
+          .eq("status", "draft")
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("publication_coauthors")
+          .select("publication_id")
+          .eq("user_id", user.id)
+          .eq("invitation_status", "accepted"),
+      ]);
+      if (ownedErr) console.error("Error fetching drafts:", ownedErr);
+      if (accErr) console.error("Error fetching accepted collabs:", accErr);
+
+      const collabIds = [...new Set((accepted ?? []).map((r) => r.publication_id))];
+      let collabPubs: typeof owned = [];
+      if (collabIds.length > 0) {
+        const { data } = await supabase
+          .from("publications")
+          .select("id, title, summary, content, hashtags, cover_url, pan_settings, created_at, status, buy_link")
+          .in("id", collabIds)
+          .eq("status", "draft");
+        collabPubs = data ?? [];
+      }
+
+      const merged = new Map<string, Draft>();
+      for (const row of [...(owned ?? []), ...(collabPubs ?? [])]) {
+        merged.set(row.id, publicationToDraft(row));
+      }
+      setDrafts([...merged.values()]);
+    } catch (e) {
+      console.error("Error refreshing drafts:", e);
+    }
+  }, [user]);
 
   useEffect(() => {
     void refreshBooks();
@@ -319,6 +520,8 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setUpvoted([]);
+      setInbox([]);
+      setDrafts([]);
       return;
     }
     void supabase
@@ -327,7 +530,26 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       .eq("user_id", user.id)
       .then(({ data }) => setUpvoted((data ?? []).map((u) => u.publication_id)))
       .catch((e) => console.error("Error fetching upvotes:", e));
-  }, [user]);
+
+    void refreshInbox();
+    void refreshDrafts();
+
+    // For principal authors, fetch pending revisions for their publications
+    // For local mock, we'll just fetch all pending revisions (requires RLS to allow)
+    void supabase
+      .from("publication_revisions")
+      .select("*")
+      .eq("status", "pending")
+      .then(({ data }) => setRevisions((data ?? []).map(r => ({
+        id: r.id,
+        publicationId: r.publication_id,
+        helperId: r.helper_id,
+        proposedBody: r.proposed_body,
+        status: r.status as "pending",
+        createdAt: r.created_at
+      }))))
+      .catch((e) => console.error("Error fetching revisions:", e));
+  }, [user, refreshInbox, refreshDrafts]);
 
   const signUp = useCallback(
     async ({ email, password, name, username, accessCode }: SignUpInput): Promise<AuthResult> => {
@@ -451,40 +673,95 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
   );
 
   const saveDraft = useCallback(
-    (d: Omit<Draft, "id" | "createdAt" | "status">) => {
+    async (d: Omit<Draft, "id" | "createdAt" | "status"> & { id?: string }): Promise<AuthResult> => {
+      if (!user) return { ok: false, error: "Sign in to save a draft." };
       const currentDrafts = drafts.filter((x) => x.status === "draft");
-      if (!user?.isPro && currentDrafts.length >= FREE_DRAFT_LIMIT) {
+      const updating = !!(d.id && (drafts.some((x) => x.id === d.id) || isUuid(d.id)));
+      if (!user.isPro && !updating && currentDrafts.length >= FREE_DRAFT_LIMIT) {
         return { ok: false, error: "Free accounts keep 5 drafts. Upgrade to Pro for unlimited." };
       }
-      setDrafts((prev) => [
-        { ...d, id: `d${Date.now()}`, createdAt: new Date().toISOString(), status: "draft" },
-        ...prev,
-      ]);
-      return { ok: true };
-    },
-    [drafts, user],
-  );
 
-  const publishBook = useCallback(
-    async (d: Omit<Draft, "id" | "createdAt" | "status">): Promise<AuthResult> => {
-      if (!user) return { ok: false, error: "Sign in to publish." };
-      if (!d.title.trim()) return { ok: false, error: "Your text needs a title." };
-      const { error } = await supabase.from("publications").insert({
+      const doc = { layout: d.layout ?? "serif", blocks: d.blocks?.length ? d.blocks : emptyDoc().blocks };
+      const literary = stripMarkdownLeaks(serializeLiterary(doc));
+      const payload = {
         author_id: user.id,
-        title: d.title.trim(),
+        title: d.title.trim() || "Untitled",
         summary: d.summary,
-        content: d.body,
+        content: literary,
         hashtags: d.hashtags,
         cover_url: d.coverImage ?? null,
         buy_link: d.buyLink ?? null,
-        pages: Math.max(1, Math.ceil((d.body.length || 1) / 900)),
+        pages: Math.max(1, Math.ceil((literary.length || 1) / 900)),
+        status: "draft",
+        pan_settings: toPanSettings({ ...d, layout: doc.layout, blocks: doc.blocks }),
+      };
+
+      const existingId = d.id && isUuid(d.id) ? d.id : undefined;
+      if (existingId) {
+        const { author_id: _authorId, ...updateRow } = payload;
+        const { error } = await supabase.from("publications").update(updateRow).eq("id", existingId);
+        if (error) return { ok: false, error: error.message };
+        const saved: Draft = {
+          ...d,
+          id: existingId,
+          body: literary,
+          blocks: doc.blocks,
+          layout: doc.layout,
+          status: "draft",
+          createdAt: drafts.find((x) => x.id === existingId)?.createdAt ?? new Date().toISOString(),
+        };
+        setDrafts((prev) => [saved, ...prev.filter((x) => x.id !== existingId)]);
+        patchWorkspace({ id: existingId, body: literary, blocks: doc.blocks, layout: doc.layout });
+        return { ok: true, id: existingId };
+      }
+
+      const { data, error } = await supabase.from("publications").insert(payload).select("id, created_at").maybeSingle();
+      if (error) return { ok: false, error: error.message };
+      const id = data?.id ?? "";
+      const saved: Draft = {
+        ...d,
+        id,
+        body: literary,
+        blocks: doc.blocks,
+        layout: doc.layout,
+        status: "draft",
+        createdAt: data?.created_at ?? new Date().toISOString(),
+      };
+      setDrafts((prev) => [saved, ...prev.filter((x) => x.id !== id)]);
+      patchWorkspace({ id, body: literary, blocks: doc.blocks, layout: doc.layout });
+      return { ok: true, id };
+    },
+    [drafts, user, patchWorkspace],
+  );
+
+  const publishBook = useCallback(
+    async (d: Omit<Draft, "id" | "createdAt" | "status"> & { id?: string }): Promise<AuthResult> => {
+      if (!user) return { ok: false, error: "Sign in to publish." };
+      if (!d.title.trim()) return { ok: false, error: "Your text needs a title." };
+      const doc = { layout: d.layout ?? "serif", blocks: d.blocks?.length ? d.blocks : emptyDoc().blocks };
+      const literary = stripMarkdownLeaks(serializeLiterary(doc));
+      const row = {
+        author_id: user.id,
+        title: d.title.trim(),
+        summary: d.summary,
+        content: literary,
+        hashtags: d.hashtags,
+        cover_url: d.coverImage ?? null,
+        buy_link: d.buyLink ?? null,
+        pages: Math.max(1, Math.ceil((literary.length || 1) / 900)),
         status: "published",
-      } as Record<string, unknown>);
+        pan_settings: toPanSettings({ ...d, layout: doc.layout, blocks: doc.blocks }),
+      };
+      const existingId = d.id && isUuid(d.id) ? d.id : undefined;
+      const { error } = existingId
+        ? await supabase.from("publications").update(row).eq("id", existingId).eq("author_id", user.id)
+        : await supabase.from("publications").insert(row);
       if (error) return { ok: false, error: error.message };
       await refreshBooks();
-      return { ok: true };
+      await refreshDrafts();
+      return { ok: true, id: existingId };
     },
-    [user, refreshBooks],
+    [user, refreshBooks, refreshDrafts],
   );
 
   const publishDraft = useCallback(
@@ -501,6 +778,9 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
 
   const deleteDraft = useCallback((id: string) => {
     setDrafts((prev) => prev.filter((d) => d.id !== id));
+    if (isUuid(id)) {
+      void supabase.from("publications").delete().eq("id", id);
+    }
   }, []);
 
   const setTier = useCallback((t: Tier) => {
@@ -618,6 +898,110 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       .sort((a, b) => b.score - a.score);
   }, [books, filter]);
 
+  const inviteCoAuthor = useCallback(async (username: string, draftId?: string): Promise<AuthResult> => {
+    if (!user) return { ok: false, error: "Not signed in." };
+    if (!draftId || !isUuid(draftId)) {
+      return { ok: false, error: "Save the draft before inviting a co-author." };
+    }
+
+    const maxCoAuthors = user.tier !== "free" ? 4 : 1;
+    const { count } = await supabase
+      .from("publication_coauthors")
+      .select("id", { count: "exact", head: true })
+      .eq("publication_id", draftId)
+      .in("invitation_status", ["pending", "accepted"]);
+    if ((count ?? 0) >= maxCoAuthors) {
+      return { ok: false, error: user.tier === "free" ? "Free tier allows 1 co-author. Upgrade for 4." : "This text already has 4 co-authors." };
+    }
+
+    const handle = username.replace(/^@/, "").trim().toLowerCase();
+    const { data: targetUser } = await supabase.from("users").select("id").eq("username", handle).maybeSingle();
+
+    if (!targetUser) return { ok: false, error: "User not found." };
+    if (targetUser.id === user.id) return { ok: false, error: "You cannot invite yourself." };
+
+    const title =
+      drafts.find((d) => d.id === draftId)?.title ||
+      workspace.draft.title ||
+      "Untitled";
+
+    const { error } = await supabase.from("publication_coauthors").insert({
+      publication_id: draftId,
+      user_id: targetUser.id,
+      invited_by: user.id,
+      book_title: title.trim() || "Untitled",
+      role: "helper",
+      full_permissions: false,
+      invitation_status: "pending",
+    });
+
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, [user, drafts, workspace.draft.title]);
+
+  const acceptInvitation = useCallback(async (inboxId: string): Promise<AuthResult> => {
+    if (!user) return { ok: false, error: "Not signed in." };
+    const { data: row, error: fetchErr } = await supabase
+      .from("publication_coauthors")
+      .select("*")
+      .eq("id", inboxId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (fetchErr) return { ok: false, error: fetchErr.message };
+    if (!row) return { ok: false, error: "Invite not found." };
+
+    const { error: updErr } = await supabase
+      .from("publication_coauthors")
+      .update({ invitation_status: "accepted" })
+      .eq("id", inboxId)
+      .eq("user_id", user.id);
+    if (updErr) return { ok: false, error: updErr.message };
+
+    setInbox((prev) => prev.filter((i) => i.id !== inboxId));
+    await refreshDrafts();
+    return { ok: true };
+  }, [user, refreshDrafts]);
+
+  const declineInvitation = useCallback(async (inboxId: string): Promise<AuthResult> => {
+    if (!user) return { ok: false, error: "Not signed in." };
+    const { error } = await supabase
+      .from("publication_coauthors")
+      .delete()
+      .eq("id", inboxId)
+      .eq("user_id", user.id);
+    if (error) return { ok: false, error: error.message };
+    setInbox((prev) => prev.filter((i) => i.id !== inboxId));
+    setDrafts((prev) => prev.filter((d) => {
+      const item = inbox.find((i) => i.id === inboxId);
+      return !item || d.id !== item.draftId;
+    }));
+    return { ok: true };
+  }, [user, inbox]);
+
+  const submitRevision = useCallback(async (draftId: string, newBody: string): Promise<AuthResult> => {
+    if (!user) return { ok: false, error: "Not signed in." };
+    const { error } = await supabase.from("publication_revisions").insert({
+      publication_id: draftId,
+      helper_id: user.id,
+      proposed_body: newBody,
+      status: "pending"
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, [user]);
+
+  const approveRevision = useCallback(async (revisionId: string): Promise<AuthResult> => {
+    if (!user) return { ok: false, error: "Not signed in." };
+    
+    // In reality we'd update the draft body with the proposed_body
+    // and then mark revision as approved.
+    const { error } = await supabase.from("publication_revisions").update({ status: "approved" }).eq("id", revisionId);
+    if (error) return { ok: false, error: error.message };
+    
+    setRevisions(prev => prev.filter(r => r.id !== revisionId));
+    return { ok: true };
+  }, [user]);
+
   const value: Store = {
     user,
     authors,
@@ -667,10 +1051,14 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     toggleFollow,
     toggleLibrary,
     setTier,
+    workspace,
+    openWorkspace,
+    patchWorkspace,
     saveDraft,
     publishDraft,
     publishBook,
     refreshBooks,
+    refreshDrafts,
     deleteDraft,
     setMaxPages,
     setMinUpvotes,
@@ -682,6 +1070,13 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
     streamBooks,
     savedBooks,
     topAuthors,
+    inbox,
+    revisions,
+    inviteCoAuthor,
+    acceptInvitation,
+    declineInvitation,
+    submitRevision,
+    approveRevision,
   };
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

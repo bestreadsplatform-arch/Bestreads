@@ -17,6 +17,9 @@ import {
   Sparkles,
   Timer,
   UserPlus,
+  Bell,
+  Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -48,6 +51,13 @@ import {
 } from "@/lib/bestreads/data";
 import { useBestreads, type View } from "@/lib/bestreads/store";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 
 const FILTERS: { key: TimeFilter; label: string }[] = [
   { key: "today", label: "Trending Today" },
@@ -141,7 +151,7 @@ function StreamCard({ book }: { book: Book }) {
     <article className="flex gap-4 border-b border-border px-4 py-5 transition-colors hover:bg-card/60">
       <UpvoteButton book={book} />
       <button onClick={() => openReading(book)} className="w-14 shrink-0 hover:opacity-80 transition-opacity">
-        <BookCover title={book.title} cover={book.cover} image={book.coverImage} />
+        <BookCover title={book.title} cover={book.cover} image={book.coverImage} coauthors={book.coauthors} />
       </button>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 text-sm">
@@ -322,6 +332,7 @@ function Discover() {
                   <BookCover
                     title={b.title}
                     author={authorById(b.authorId).name}
+                    coauthors={b.coauthors}
                     cover={b.cover}
                     className="transition-transform duration-300 group-hover:-translate-y-1"
                   />
@@ -478,7 +489,7 @@ function RightSidebar() {
 }
 
 function Header() {
-  const { search, setSearch, user, setView, signOut, openProfile } = useBestreads();
+  const { search, setSearch, user, setView, signOut, openProfile, inbox, acceptInvitation, declineInvitation } = useBestreads();
   return (
     <header className="sticky top-0 z-30 flex flex-wrap items-center gap-3 border-b border-border bg-background/90 px-4 py-3 backdrop-blur">
       <button onClick={() => setView("discover")} className="font-display text-xl font-semibold">
@@ -496,6 +507,46 @@ function Header() {
       <Button onClick={() => setView("studio")}>
         <PenLine className="size-4" /> Write Something Human
       </Button>
+
+      {user && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="size-5" />
+              {inbox.length > 0 && (
+                <span className="absolute right-2 top-2 flex size-3 items-center justify-center rounded-full bg-primary text-[0.5rem] font-bold text-primary-foreground">
+                  {inbox.length}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80 p-2">
+            <h4 className="px-2 py-1 text-sm font-semibold">Buzón (Inbox)</h4>
+            <DropdownMenuSeparator />
+            {inbox.length === 0 ? (
+              <p className="p-4 text-center text-xs text-muted-foreground">No pending invitations.</p>
+            ) : (
+              inbox.map((inv) => (
+                <div key={inv.id} className="mb-2 rounded-md border border-border bg-card p-3 text-xs">
+                  <p className="mb-2">
+                    <span className="font-semibold">User {inv.senderId}</span> invited you to co-author{" "}
+                    <span className="font-semibold italic">"{inv.bookTitle}"</span>.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="default" className="h-7 w-full text-xs" onClick={() => void acceptInvitation(inv.id)}>
+                      <Check className="size-3.5 mr-1" /> Accept
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 w-full text-xs" onClick={() => void declineInvitation(inv.id)}>
+                      <X className="size-3.5 mr-1" /> Decline
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
       <div className="flex items-center gap-2 rounded-full border border-border bg-card px-2 py-1">
         <button
           onClick={() => { if (user) openProfile(user.id); }}

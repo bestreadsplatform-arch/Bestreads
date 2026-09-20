@@ -151,6 +151,69 @@ export type Database = {
           },
         ]
       }
+      publication_coauthors: {
+        Row: {
+          id: string
+          publication_id: string
+          user_id: string
+          invited_by: string
+          book_title: string
+          role: string
+          full_permissions: boolean | null
+          invitation_status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          publication_id: string
+          user_id: string
+          invited_by: string
+          book_title?: string
+          role?: string
+          full_permissions?: boolean | null
+          invitation_status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          publication_id?: string
+          user_id?: string
+          invited_by?: string
+          book_title?: string
+          role?: string
+          full_permissions?: boolean | null
+          invitation_status?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      publication_revisions: {
+        Row: {
+          id: string
+          publication_id: string
+          helper_id: string
+          proposed_body: string
+          status: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          publication_id: string
+          helper_id: string
+          proposed_body: string
+          status?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          publication_id?: string
+          helper_id?: string
+          proposed_body?: string
+          status?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
       trophy_claims: {
         Row: {
           claimed_at: string | null

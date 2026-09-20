@@ -149,7 +149,7 @@ export function Bookshelf() {
           {openDrafts.map((d) => (
             <div key={d.id} className="flex gap-3 rounded-lg border border-border bg-card p-3">
               <div className="w-12 shrink-0">
-                <BookCover title={d.title} cover={d.cover} image={d.coverImage} />
+                <BookCover title={d.title} cover={d.cover} image={d.coverImage} coauthors={d.coauthors} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-display truncate text-base font-semibold">{d.title}</p>
@@ -194,7 +194,7 @@ export function Bookshelf() {
                 )}
               >
                 <div className="w-9 shrink-0">
-                  <BookCover title={b.title} cover={b.cover} image={b.coverImage} />
+                  <BookCover title={b.title} cover={b.cover} image={b.coverImage} coauthors={b.coauthors} />
                 </div>
                 <span className="font-display truncate text-sm font-semibold">{b.title}</span>
               </button>
@@ -259,7 +259,7 @@ export function Bookshelf() {
                     <button
                       className="block transition-transform group-hover:-translate-y-1 duration-300 text-left"
                     >
-                      <BookCover title={b.title} cover={b.cover} image={b.coverImage} />
+                      <BookCover title={b.title} cover={b.cover} image={b.coverImage} coauthors={b.coauthors} />
                     </button>
                     <p className="font-display truncate text-sm font-semibold mt-2">{b.title}</p>
                     <p className="line-clamp-2 text-xs text-muted-foreground">{b.summary}</p>

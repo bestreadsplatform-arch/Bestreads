@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { BadgeCheck, Flag, ImagePlus, ScanSearch, Save, Send } from "lucide-react";
+import { BadgeCheck, Flag, ImagePlus, ScanSearch, Save, Send, Type, Heading1, Heading2, Quote, LayoutTemplate, Users, Check, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { BookCover } from "./BookCover";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
 import { useBestreads } from "@/lib/bestreads/store";
+import { cn } from "@/lib/utils";
 
 const MAX_WORDS = 2000;
 const PAGE_HEIGHT = 420;
@@ -102,15 +103,23 @@ function CoverCropper({
 }
 
 export function Studio() {
-  const { saveDraft, publishBook, setView, user } = useBestreads();
+  const { saveDraft, publishBook, setView, user, revisions, inviteCoAuthor, approveRevision } = useBestreads();
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [tagInput, setTagInput] = useState("");
   const [tags, setTags] = useState<string[]>([]);
   const [body, setBody] = useState("");
   const [coverImage, setCoverImage] = useState<string | undefined>(undefined);
+  const [bannerImage, setBannerImage] = useState<string>("");
   const [buyLink, setBuyLink] = useState("");
   const [cropperOpen, setCropperOpen] = useState(false);
+
+  // Notion-style features
+  const [typography, setTypography] = useState<"serif" | "poetry" | "modern">("serif");
+  const [bubbleStyle, setBubbleStyle] = useState<React.CSSProperties>({ display: "none" });
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [inviteInput, setInviteInput] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const words = useMemo(() => body.trim().split(/\s+/).filter(Boolean).length, [body]);
   const pages = Math.max(1, Math.ceil((body.length || 1) / 900));
@@ -126,12 +135,49 @@ export function Studio() {
     setTagInput("");
   };
 
+  const handleSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const target = e.currentTarget;
+    if (target.selectionStart !== target.selectionEnd) {
+      // Rough position for local demo
+      const { selectionStart, value } = target;
+      // Just a simple fixed floating bar for the mockup
+      setBubbleStyle({ display: "flex", top: "10px", right: "10px" });
+    } else {
+      setBubbleStyle({ display: "none" });
+    }
+  };
+
+  const applyFormat = (prefix: string, suffix: string = "") => {
+    if (!textareaRef.current) return;
+    const start = textareaRef.current.selectionStart;
+    const end = textareaRef.current.selectionEnd;
+    if (start === end) return;
+    const selectedText = body.substring(start, end);
+    const newBody = body.substring(0, start) + prefix + selectedText + suffix + body.substring(end);
+    setBody(newBody);
+    setBubbleStyle({ display: "none" });
+  };
+
+  const applyTemplate = (template: string) => {
+    setBody(template);
+    setTemplatesOpen(false);
+  };
+
   const persist = async (publish: boolean) => {
     if (!title.trim()) {
       toast.error("Your text needs a title.");
       return;
     }
-    const payload = { title, summary, hashtags: tags, body, cover: 2, coverImage, buyLink: buyLink.trim() || undefined };
+    const payload = { 
+      title, 
+      summary, 
+      hashtags: tags, 
+      body, 
+      cover: 2, 
+      coverImage, 
+      bannerImage: bannerImage.trim() || undefined,
+      buyLink: buyLink.trim() || undefined 
+    };
     const res = publish ? await publishBook(payload) : saveDraft(payload);
     if (!res.ok) {
       toast.error(res.error ?? "Could not save");
@@ -184,16 +230,44 @@ export function Studio() {
             <span className="text-xs text-muted-foreground">{tags.length}/5</span>
           </div>
 
-          <div className="relative rounded-sm border border-border bg-parchment shadow-soft">
+          <div className="relative rounded-sm border border-border bg-parchment shadow-soft overflow-hidden transition-all duration-300">
+            {bannerImage && (
+              <div className="h-48 w-full border-b border-border">
+                <img src={bannerImage} alt="Banner" className="h-full w-full object-cover" />
+              </div>
+            )}
             <div
               className="paper-edge pointer-events-none absolute inset-0"
               style={{ ["--page-height" as string]: `${PAGE_HEIGHT}px` }}
             />
+
+            {/* Bubble Toolbar */}
+            <div 
+              className="absolute z-20 gap-1 rounded-md border border-border bg-card p-1 shadow-lg backdrop-blur-md"
+              style={bubbleStyle}
+            >
+              <div className="flex items-center gap-1 border-r border-border pr-2">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setTypography("serif")} title="Serif Novel"><Type className="h-3 w-3" /></Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setTypography("poetry")} title="Sinuous Poetry"><Type className="h-3 w-3 opacity-70" /></Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setTypography("modern")} title="Modernist Essay"><Type className="h-3 w-3 font-sans" /></Button>
+              </div>
+              <div className="flex items-center gap-1 pl-1">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => applyFormat("# ")} title="H1"><Heading1 className="h-3 w-3" /></Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => applyFormat("## ")} title="H2"><Heading2 className="h-3 w-3" /></Button>
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => applyFormat("> ")} title="Blockquote"><Quote className="h-3 w-3" /></Button>
+              </div>
+            </div>
+
             <Textarea
+              ref={textareaRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
+              onSelect={handleSelect}
               placeholder="Begin. The first sentence is the only one that has to be brave…"
-              className="font-display relative min-h-[840px] resize-none border-0 bg-transparent p-10 text-lg leading-8 shadow-none focus-visible:ring-0"
+              className={cn(
+                "relative min-h-[840px] resize-none border-0 bg-transparent p-10 text-lg leading-8 shadow-none focus-visible:ring-0",
+                typography === "serif" ? "font-serif" : typography === "poetry" ? "font-serif italic tracking-wide" : "font-sans font-light"
+              )}
             />
             <div className="pointer-events-none absolute right-3 bottom-2 text-[0.65rem] tracking-widest text-muted-foreground uppercase">
               {pages} page{pages > 1 ? "s" : ""} · A4 simulation
@@ -206,6 +280,64 @@ export function Studio() {
           <Button variant="outline" className="w-full" onClick={() => setCropperOpen(true)}>
             <ImagePlus className="size-4" /> Upload Cover Art
           </Button>
+
+          <div className="space-y-1.5 pt-2">
+            <Label className="text-xs">Banner Image URL</Label>
+            <Input
+              value={bannerImage}
+              onChange={(e) => setBannerImage(e.target.value)}
+              placeholder="https://..."
+              className="text-xs"
+            />
+          </div>
+
+          <Button variant="secondary" className="w-full flex items-center justify-center gap-2" onClick={() => setTemplatesOpen(true)}>
+            <LayoutTemplate className="size-4" /> Formatting Templates
+          </Button>
+
+          {/* Co-Authors & Helpers Sidebar */}
+          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+            <h3 className="flex items-center gap-2 font-display text-sm font-semibold">
+              <Users className="size-4" /> Co-Authors & Helpers
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {user?.tier === "free" ? "Free tier allows 1 co-author. Upgrade for 4." : "Pro tier allows up to 4 co-authors."}
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={inviteInput}
+                onChange={(e) => setInviteInput(e.target.value)}
+                placeholder="@username"
+                className="text-xs h-8"
+              />
+              <Button size="sm" variant="default" className="h-8 shrink-0" onClick={() => {
+                void inviteCoAuthor(inviteInput).then(res => {
+                  if (res.ok) {
+                    toast.success("Invitation sent.");
+                    setInviteInput("");
+                  } else {
+                    toast.error(res.error);
+                  }
+                });
+              }}>
+                <UserPlus className="size-3" />
+              </Button>
+            </div>
+            
+            {revisions.length > 0 && (
+              <div className="mt-4 rounded-md bg-amber-500/10 border border-amber-500/20 p-3">
+                <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-2">
+                  <Check className="size-3 inline mr-1" /> Approve Changes from Helper
+                </p>
+                <p className="text-xs text-muted-foreground mb-3">You have {revisions.length} pending revision(s).</p>
+                {revisions.map(rev => (
+                  <Button key={rev.id} size="sm" className="w-full text-xs" onClick={() => void approveRevision(rev.id)}>
+                    Approve Revision
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {user?.isPro && (
             <div className="space-y-1.5 pt-2">
@@ -232,6 +364,25 @@ export function Studio() {
       </div>
 
       <CoverCropper open={cropperOpen} onOpenChange={setCropperOpen} onApply={setCoverImage} />
+
+      <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Formatting Templates</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Button variant="outline" className="h-16 justify-start px-4 text-left font-serif text-sm" onClick={() => applyTemplate("# Novel Outline\n\n## Chapter 1\n\n[Content here]\n\n## Chapter 2\n\n[Content here]")}>
+              Novel Outline
+            </Button>
+            <Button variant="outline" className="h-16 justify-start px-4 text-left font-serif italic text-sm" onClick={() => applyTemplate("# Poetry Grid\n\n> Verse 1\n> Line 2\n> Line 3\n\n> Verse 2\n> Line 2\n> Line 3")}>
+              Poetry Grid
+            </Button>
+            <Button variant="outline" className="h-16 justify-start px-4 text-left font-sans text-sm" onClick={() => applyTemplate("# Essay Title\n\n## Introduction\n\n[Content]\n\n## Thesis\n\n[Content]")}>
+              Modernist Essay
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-4 px-4 py-3 text-xs">
