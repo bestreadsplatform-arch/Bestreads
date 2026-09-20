@@ -83,3 +83,31 @@ CREATE POLICY "Users can insert their own trophy claims" ON public.trophy_claims
 -- CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- 5. Triggers to sync upvotes_count
+CREATE OR REPLACE FUNCTION public.sync_upvotes_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE public.publications
+    SET upvotes_count = upvotes_count + 1
+    WHERE id = NEW.publication_id;
+    RETURN NEW;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE public.publications
+    SET upvotes_count = upvotes_count - 1
+    WHERE id = OLD.publication_id;
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_upvote_added ON public.upvotes_ledger;
+CREATE TRIGGER on_upvote_added
+  AFTER INSERT ON public.upvotes_ledger
+  FOR EACH ROW EXECUTE FUNCTION public.sync_upvotes_count();
+
+DROP TRIGGER IF EXISTS on_upvote_removed ON public.upvotes_ledger;
+CREATE TRIGGER on_upvote_removed
+  AFTER DELETE ON public.upvotes_ledger
+  FOR EACH ROW EXECUTE FUNCTION public.sync_upvotes_count();

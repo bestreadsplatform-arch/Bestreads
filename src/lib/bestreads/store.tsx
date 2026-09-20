@@ -173,7 +173,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           { id: authUser.id, name: resolvedName, username: resolvedUsername, payment_tier_status: "free" },
           { onConflict: "id", ignoreDuplicates: false },
         )
-        .select("id, name, username, payment_tier_status, biography, external_links")
+        .select("id, name, username, payment_tier_status, biography, external_links, avatar_url")
         .maybeSingle();
 
       if (upsertError) console.error("Failed to upsert users row:", upsertError);
@@ -188,6 +188,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         id: authUser.id,
         name: row?.name ?? resolvedName,
         username: row?.username ?? resolvedUsername,
+        avatarUrl: row?.avatar_url ?? undefined,
         tier,
         isPro,
         isHallOfFameEditor: false,
@@ -202,6 +203,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         isPro,
         isHallOfFameEditor: false,
         links,
+        avatarUrl: row?.avatar_url ?? undefined,
       }]);
     } catch (e) {
       console.error("Error loading profile:", e);
@@ -256,7 +258,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           )
           .eq("status", "published")
           .order("upvotes_count", { ascending: false }),
-        supabase.from("users").select("id, name, username, payment_tier_status, biography"),
+        supabase.from("users").select("id, name, username, payment_tier_status, biography, avatar_url"),
       ]);
 
       if (publicationsRes.error) console.error("Error fetching publications:", publicationsRes.error);
@@ -273,6 +275,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           bio: p.biography ?? "",
           isPro: ["pro_monthly", "pro_annual"].includes((p.payment_tier_status ?? "").toLowerCase()),
           isHallOfFameEditor: false,
+          avatarUrl: p.avatar_url ?? undefined,
         }));
         registerAuthors(mapped);
         setAuthors(mapped);
@@ -529,6 +532,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
         ...(fields.name ? { name: fields.name } : {}),
         ...(fields.bio !== undefined ? { biography: fields.bio } : {}),
         ...(fields.links !== undefined ? { external_links: fields.links } : {}),
+        ...(fields.avatarUrl !== undefined ? { avatar_url: fields.avatarUrl } : {}),
       })
       .eq("id", user.id);
     if (error) return { ok: false, error: error.message };

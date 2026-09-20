@@ -7,19 +7,22 @@ import { cn } from "@/lib/utils";
 
 const FREE_FEATURES = [
   "Browse every feed and the full Top 10",
+  "Fully eligible for the Monthly & Annual physical trophies",
   "Library limited to 5 books",
   "Up to 5 saved drafts",
-  "Plain-text storefront links",
-  "Single 3-pillar analytics chart",
+  "Standard writing interface and text links",
 ];
 
 const PRO_FEATURES = [
+  "Boosted visibility for all your published books",
+  "Advanced Writer Studio (Professional editing UI)",
   "Unlimited library & unlimited drafts",
   "Advanced feed filters — length & upvotes",
   "Premium CTA buttons on your cards & profile",
   "Hour-by-hour / day-by-day Pro line charts",
   "Views, Buy-link clicks & Saves analytics",
   "Priority visibility in the Hall of Fame",
+  "Eligible for the physical trophies",
 ];
 
 export function Pricing() {
@@ -35,7 +38,7 @@ export function Pricing() {
     await upgradeTier(newTier);
     toast.success(
       newTier === "pro_annual"
-        ? "Pro Annual unlocked — two months on the house! 🎉"
+        ? "Pro Annual unlocked — save ~35% vs monthly! 🎉"
         : "Pro Monthly unlocked — enjoy unlimited everything! 🎉",
     );
   };
@@ -93,10 +96,10 @@ export function Pricing() {
         >
           <div className="flex items-start justify-between">
             <h2 className="font-display text-2xl font-semibold">Pro Monthly</h2>
-            <Crown className="size-5 text-gold-foreground mt-0.5" />
+            <Crown className="mt-0.5 size-5 text-gold-foreground" />
           </div>
           <p className="text-metric mt-2 text-4xl font-semibold">
-            9€{" "}
+            12€{" "}
             <span className="text-base font-normal text-muted-foreground">/month</span>
           </p>
           <p className="text-xs text-muted-foreground">Cancel any time</p>
@@ -114,7 +117,7 @@ export function Pricing() {
             onClick={() => void handleUpgrade("pro_monthly")}
           >
             <CreditCard className="size-4" />
-            {tier === "pro_monthly" ? "Current plan" : "Upgrade for 9€/month"}
+            {tier === "pro_monthly" ? "Current plan" : "Upgrade for 12€/month"}
           </Button>
         </div>
 
@@ -133,13 +136,13 @@ export function Pricing() {
           </div>
           <div className="flex items-start justify-between">
             <h2 className="font-display text-2xl font-semibold">Pro Annual</h2>
-            <Crown className="size-5 text-gold-foreground mt-0.5 fill-current" />
+            <Crown className="mt-0.5 size-5 fill-current text-gold-foreground" />
           </div>
           <p className="text-metric mt-2 text-4xl font-semibold">
-            69€{" "}
+            89€{" "}
             <span className="text-base font-normal text-muted-foreground">/year</span>
           </p>
-          <p className="text-xs text-muted-foreground">Two months free — 5.75€/mo equivalent</p>
+          <p className="text-xs text-muted-foreground">~7.40€/mo — save over 35% vs monthly</p>
           <ul className="mt-6 space-y-2 text-sm">
             {PRO_FEATURES.map((f) => (
               <li key={f} className="flex gap-2">
@@ -154,7 +157,7 @@ export function Pricing() {
             onClick={() => void handleUpgrade("pro_annual")}
           >
             <Crown className="size-4" />
-            {tier === "pro_annual" ? "Current plan" : "Upgrade for 69€/year"}
+            {tier === "pro_annual" ? "Current plan" : "Upgrade for 89€/year"}
           </Button>
         </div>
       </div>
