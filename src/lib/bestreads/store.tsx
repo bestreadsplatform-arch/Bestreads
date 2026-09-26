@@ -71,7 +71,7 @@ export type WorkspaceState = {
   draft: Draft;
 };
 
-type AuthResult = { ok: boolean; error?: string; id?: string };
+type AuthResult = { ok: boolean; error?: string; message?: string; id?: string };
 
 function blankDraft(): Draft {
   const doc = emptyDoc("serif");
@@ -579,12 +579,16 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       if (code.length > 0 && code !== HOF_CODE)
         return { ok: false, error: "That secret access code is not valid." };
 
-      const { data: available, error: availabilityError } = await supabase.rpc("username_available", {
-        _username: handle,
-      });
+      // Keep signup independent from an optional database RPC. The public users
+      // policy already lets us check the unique handle before creating the account.
+      const { data: existingUser, error: availabilityError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("username", handle)
+        .maybeSingle();
       if (availabilityError)
         return { ok: false, error: "We could not check that username. Please try again." };
-      if (available === false)
+      if (existingUser)
         return { ok: false, error: `@${handle} is already taken. Try another handle.` };
 
       const { error } = await supabase.auth.signUp({
@@ -612,13 +616,16 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<AuthResult> => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
-      if (error) return { ok: false, error: error.message };
-      if (data.user) await loadProfile(data.user);
-      return { ok: true };
+      const mail = email.trim().toLowerCase();
+      if (!mail || !password) return { ok: false, error: "Enter your email and password." };
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email: mail, password });
+        if (error) return { ok: false, error: error.message };
+        if (data.user) await loadProfile(data.user);
+        return { ok: true };
+      } catch {
+        return { ok: false, error: "We could not reach Bestreads. Please try again." };
+      }
     },
     [loadProfile],
   );

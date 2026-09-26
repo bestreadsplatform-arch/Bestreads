@@ -54,21 +54,37 @@ export function Landing() {
   const [code, setCode] = useState("");
 
   const doSignIn = async () => {
+    if (busy) return;
     setBusy(true);
-    const res = await signIn(email, password);
-    setBusy(false);
-    if (!res.ok) toast.error(res.error ?? "Could not sign in");
+    try {
+      const res = await signIn(email, password);
+      if (!res.ok) toast.error(res.error ?? "Could not sign in");
+    } catch {
+      toast.error("We could not reach Bestreads. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const doSignUp = async () => {
+    if (busy) return;
     setBusy(true);
-    const res = await signUp({ email, password, name, username: newHandle, accessCode: code });
-    setBusy(false);
-    if (!res.ok) toast.error(res.error ?? "Could not sign up");
-    else if (code.trim().length > 0)
-      toast.success("Hall of Fame editor privileges unlocked", {
-        description: "You can now edit the magazine.",
-      });
+    try {
+      const res = await signUp({ email, password, name, username: newHandle, accessCode: code });
+      if (!res.ok) {
+        toast.error(res.error ?? "Could not sign up");
+      } else if (code.trim().length > 0) {
+        toast.success("Hall of Fame editor privileges unlocked", {
+          description: "You can now edit the magazine.",
+        });
+      } else {
+        toast.success("Your account is ready. Welcome to Bestreads.");
+      }
+    } catch {
+      toast.error("We could not reach Bestreads. Please try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
 
