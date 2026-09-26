@@ -591,7 +591,7 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       if (existingUser)
         return { ok: false, error: `@${handle} is already taken. Try another handle.` };
 
-      const { error } = await supabase.auth.signUp({
+      const { data: signupData, error } = await supabase.auth.signUp({
         email: mail,
         password,
         options: {
@@ -599,7 +599,35 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
           data: { name: name.trim(), username: handle },
         },
       });
-      if (error) return { ok: false, error: error.message };
+      if (error) {
+        // Supabase can rate-limit repeated confirmation emails while the account
+        // already exists. Let a confirmed account enter immediately instead of
+        // making the user submit the same signup form again.
+        if (error.message.toLowerCase().includes("rate limit")) {
+          const { data: existingSession, error: existingSignInError } = await supabase.auth.signInWithPassword({
+            email: mail,
+            password,
+          });
+          if (!existingSignInError && existingSession.user) {
+            await loadProfile(existingSession.user);
+            return { ok: true, message: "Welcome back. Your existing account is ready." };
+          }
+          if (existingSignInError?.message.toLowerCase().includes("email not confirmed")) {
+            return {
+              ok: false,
+              error: "This account still needs email confirmation. Turn off Confirm email in Supabase Auth settings for testing, then sign in again.",
+            };
+          }
+        }
+        return { ok: false, error: error.message };
+      }
+
+      if (signupData.user && !signupData.session) {
+        return {
+          ok: false,
+          error: "Your account was created, but email confirmation is still enabled. Turn off Confirm email in Supabase Auth settings for testing, then sign in again.",
+        };
+      }
 
       if (code === HOF_CODE) {
         const { data: redeemed } = await supabase.rpc("redeem_hof_code", { _code: code });
