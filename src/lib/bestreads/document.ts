@@ -87,6 +87,22 @@ export function wordCount(doc: LiteraryDoc): number {
   return serializeLiterary(doc).trim().split(/\s+/).filter(Boolean).length;
 }
 
+export function limitDocToWords(doc: LiteraryDoc, maxWords: number): LiteraryDoc {
+  let remaining = maxWords;
+  const blocks = doc.blocks.map((block) => {
+    if (remaining <= 0) return { ...block, text: "" };
+    const words = block.text.trim().split(/\s+/).filter(Boolean);
+    if (words.length <= remaining) {
+      remaining -= words.length;
+      return block;
+    }
+    const text = words.slice(0, remaining).join(" ");
+    remaining = 0;
+    return { ...block, text };
+  });
+  return { ...doc, blocks };
+}
+
 export function isBlockKind(value: string): value is BlockKind {
   return value === "paragraph" || value === "heading1" || value === "heading2" || value === "quote" || value === "verse";
 }

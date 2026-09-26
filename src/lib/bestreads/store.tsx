@@ -275,8 +275,8 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
 
       const { data: upserted, error: upsertError } = await supabase
         .from("users")
-        .upsert(
-          { id: authUser.id, name: resolvedName, username: resolvedUsername, payment_tier_status: "free" },
+          .upsert(
+          { id: authUser.id, name: resolvedName, username: resolvedUsername },
           { onConflict: "id", ignoreDuplicates: false },
         )
         .select("id, name, username, payment_tier_status, biography, external_links, avatar_url")

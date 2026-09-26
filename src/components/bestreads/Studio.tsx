@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { LayoutTemplate, Save, Send, Users, UserPlus, ImagePlus } from "lucide-react";
+import { Check, ImagePlus, LayoutTemplate, Save, Send, Users, UserPlus, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useBestreads } from "@/lib/bestreads/store";
-import { LITERARY_TEMPLATES, serializeLiterary, type LiteraryDoc } from "@/lib/bestreads/document";
+import { LITERARY_TEMPLATES, limitDocToWords, serializeLiterary, type LiteraryDoc } from "@/lib/bestreads/document";
 import { LiteraryEditor } from "./LiteraryEditor";
 
-const MAX_WORDS = 2000;
+const FREE_MAX_WORDS = 5000;
 
 export function Studio() {
   const { workspace, patchWorkspace, saveDraft, publishBook, setView, user, inviteCoAuthor } = useBestreads();
+  const maxWords = user?.isPro ? null : FREE_MAX_WORDS;
   const draft = workspace.draft;
   const [tagInput, setTagInput] = useState("");
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -24,20 +25,53 @@ export function Studio() {
   const body = serializeLiterary(doc);
   const words = useMemo(() => body.trim().split(/\s+/).filter(Boolean).length, [body]);
   const pages = Math.max(1, Math.ceil((body.length || 1) / 900));
+  const wordsRemaining = maxWords === null ? null : Math.max(0, maxWords - words);
 
-  const addTag = () => {
+  const addTag = (): void => {
     const value = tagInput.trim().replace(/^#*/, "").toUpperCase();
     if (!value) return;
-    if (draft.hashtags.length >= 5) return toast.error("Maximum of 5 hashtags per text.");
+    if (draft.hashtags.length >= 5) {
+      toast.error("Maximum of 5 hashtags per text.");
+      return;
+    }
     patchWorkspace({ hashtags: [...draft.hashtags, `#${value}`] });
     setTagInput("");
   };
 
-  const persist = async (publish: boolean) => {
-    if (!draft.title.trim()) return toast.error("Your text needs a title.");
+  const readCoverFile = (file?: File): void => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Choose an image file for the cover.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Cover images must be under 5 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => patchWorkspace({ coverImage: typeof reader.result === "string" ? reader.result : undefined });
+    reader.readAsDataURL(file);
+  };
+
+  const handleEditorChange = (next: LiteraryDoc): void => {
+    const limited = maxWords === null ? next : limitDocToWords(next, maxWords);
+    if (maxWords !== null && serializeLiterary(next) !== serializeLiterary(limited)) {
+      toast.error(`Free accounts are limited to ${maxWords.toLocaleString()} words.`);
+    }
+    patchWorkspace({ blocks: limited.blocks, layout: limited.layout, body: serializeLiterary(limited) });
+  };
+
+  const persist = async (publish: boolean): Promise<void> => {
+    if (!draft.title.trim()) {
+      toast.error("Your text needs a title.");
+      return;
+    }
     const payload = { ...draft, body, blocks: draft.blocks, layout: draft.layout };
     const result = publish ? await publishBook(payload) : await saveDraft(payload);
-    if (!result.ok) return toast.error(result.error ?? "Could not save");
+    if (!result.ok) {
+      toast.error(result.error ?? "Could not save");
+      return;
+    }
     toast.success(publish ? "Published — live on Bestreads" : "Draft saved");
     setView("bookshelf");
   };
@@ -59,13 +93,25 @@ export function Studio() {
           </div>
           <section className="overflow-hidden rounded-sm border border-border bg-parchment shadow-soft">
             {draft.bannerImage && <img src={draft.bannerImage} alt="Publication banner" className="h-48 w-full border-b border-border object-cover" />}
-            <LiteraryEditor doc={doc} hydrateKey={`${workspace.nonce}:${draft.id}`} onChange={(next) => patchWorkspace({ blocks: next.blocks, layout: next.layout, body: serializeLiterary(next) })} placeholder="Begin. The first sentence is the only one that has to be brave…" />
+            <LiteraryEditor doc={doc} hydrateKey={`${workspace.nonce}:${draft.id}`} onChange={handleEditorChange} placeholder="Begin. The first sentence is the only one that has to be brave…" />
             <div className="px-4 pb-3 text-right text-[0.65rem] tracking-widest text-muted-foreground uppercase">{pages} page{pages > 1 ? "s" : ""} · A4 simulation</div>
           </section>
         </main>
         <aside className="flex flex-col gap-4">
           <div className="rounded-xl border border-border bg-card p-4">
-            <div className="mb-2 flex items-center gap-2"><ImagePlus className="size-4" /><Label htmlFor="banner" className="text-xs">Banner image URL</Label></div>
+            <div className="mb-2 flex items-center gap-2"><ImagePlus className="size-4" /><Label htmlFor="cover-file" className="text-xs">Cover image</Label></div>
+            {draft.coverImage ? (
+              <div className="relative mb-3 overflow-hidden rounded-lg border border-border bg-muted">
+                <img src={draft.coverImage} alt="Book cover preview" className="aspect-[2/3] w-full object-cover" />
+                <Button type="button" size="icon" variant="secondary" className="absolute right-2 top-2" onClick={() => patchWorkspace({ coverImage: undefined })} aria-label="Remove cover image"><X /></Button>
+              </div>
+            ) : null}
+            <input id="cover-file" type="file" accept="image/*" className="sr-only" onChange={(e) => readCoverFile(e.target.files?.[0])} />
+            <Button type="button" variant="outline" className="w-full" onClick={() => document.getElementById("cover-file")?.click()}><Upload data-icon="inline-start" /> {draft.coverImage ? "Replace cover" : "Upload cover"}</Button>
+            <p className="mt-2 text-xs text-muted-foreground">JPG, PNG, or WebP up to 5 MB.</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-2 flex items-center gap-2"><ImagePlus className="size-4" /><Label htmlFor="banner" className="text-xs">Header image URL</Label></div>
             <Input id="banner" value={draft.bannerImage ?? ""} onChange={(e) => patchWorkspace({ bannerImage: e.target.value || undefined })} placeholder="https://…" className="text-xs" />
           </div>
           <Button variant="secondary" className="w-full" onClick={() => setTemplatesOpen(true)}><LayoutTemplate className="size-4" /> Formatting templates</Button>
@@ -78,8 +124,8 @@ export function Studio() {
           <Button variant="secondary" className="w-full" onClick={() => void persist(false)}><Save className="size-4" /> Save draft</Button>
         </aside>
       </div>
-      <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}><DialogContent><DialogHeader><DialogTitle className="font-display">Formatting templates</DialogTitle></DialogHeader><div className="grid gap-3">{([['novel','Novel outline'],['poetry','Poetry grid'],['essay','Modernist essay']] as const).map(([key, label]) => <Button key={key} variant="outline" className="h-14 justify-start" onClick={() => { const template = LITERARY_TEMPLATES[key]; patchWorkspace({ blocks: template.blocks.map((block) => ({ ...block, id: crypto.randomUUID() })), layout: template.layout, body: serializeLiterary(template) }); setTemplatesOpen(false); }}>{label}</Button>)}</div></DialogContent></Dialog>
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur"><div className="mx-auto flex max-w-5xl items-center gap-4 px-4 py-3 text-xs"><span className="font-semibold">{words}/{MAX_WORDS} words</span><span className="ml-auto text-muted-foreground">Draft changes are saved when you choose Save draft.</span></div></div>
+      <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}><DialogContent><DialogHeader><DialogTitle className="font-display">Formatting templates</DialogTitle></DialogHeader><div className="grid gap-3">{([['novel','Novel outline'],['poetry','Poetry grid'],['essay','Modernist essay']] as const).map(([key, label]) => <Button key={key} variant="outline" className="h-14 justify-start" onClick={() => { const template = LITERARY_TEMPLATES[key]; if (!template) return; const nextDoc = { layout: template.layout, blocks: template.blocks.map((block) => ({ ...block, id: crypto.randomUUID() })) }; patchWorkspace({ blocks: nextDoc.blocks, layout: nextDoc.layout, body: serializeLiterary(nextDoc) }); setTemplatesOpen(false); }}>{label}</Button>)}</div></DialogContent></Dialog>
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur"><div className="mx-auto flex max-w-5xl flex-wrap items-center gap-3 px-4 py-3 text-xs"><span className="inline-flex items-center gap-1.5 font-semibold">{maxWords === null ? <Check /> : <span className={wordsRemaining === 0 ? "text-destructive" : ""}>{wordsRemaining?.toLocaleString()} left</span>} {words.toLocaleString()} words</span><span className="ml-auto text-muted-foreground">{maxWords === null ? "Pro · unlimited writing" : "Free plan · 5,000-word maximum"} · Save when ready.</span></div></div>
     </div>
   );
 }
