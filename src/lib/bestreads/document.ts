@@ -1,10 +1,12 @@
 export type LiteraryLayout = "serif" | "poetry" | "modern";
-export type BlockKind = "paragraph" | "heading1" | "heading2" | "quote" | "verse";
+export type BlockKind = "paragraph" | "heading1" | "heading2" | "quote" | "verse" | "image";
 
 export type DocBlock = {
   id: string;
   kind: BlockKind;
   text: string;
+  imageUrl?: string;
+  imageAlt?: string;
 };
 
 export type LiteraryDoc = {
@@ -70,6 +72,8 @@ export function hydrateDoc(content: string, pan?: PanSettings | null): LiteraryD
         id: b.id || createBlock().id,
         kind: isBlockKind(b.kind) ? b.kind : "paragraph",
         text: stripMarkdownLeaks(b.text ?? ""),
+        imageUrl: typeof b.imageUrl === "string" ? b.imageUrl : undefined,
+        imageAlt: typeof b.imageAlt === "string" ? b.imageAlt : undefined,
       })),
     };
   }
@@ -78,7 +82,9 @@ export function hydrateDoc(content: string, pan?: PanSettings | null): LiteraryD
 
 export function serializeLiterary(doc: LiteraryDoc): string {
   return doc.blocks
+    .filter((b) => b.kind !== "image")
     .map((b) => stripMarkdownLeaks(b.text).trimEnd())
+    .filter(Boolean)
     .join("\n\n")
     .replace(/^\n+|\n+$/g, "");
 }
@@ -104,7 +110,7 @@ export function limitDocToWords(doc: LiteraryDoc, maxWords: number): LiteraryDoc
 }
 
 export function isBlockKind(value: string): value is BlockKind {
-  return value === "paragraph" || value === "heading1" || value === "heading2" || value === "quote" || value === "verse";
+  return value === "paragraph" || value === "heading1" || value === "heading2" || value === "quote" || value === "verse" || value === "image";
 }
 
 export function normalizeSelection(sel: EditorSelection, blockCount: number): EditorSelection | null {

@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { Heading1, Heading2, Quote, Type } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Heading1, Heading2, ImagePlus, Quote, Type } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -86,6 +86,7 @@ export function LiteraryEditor({
   docRef.current = doc;
   const [bubble, setBubble] = useState<BubblePos>(null);
   const [liveSel, setLiveSel] = useState<EditorSelection | null>(null);
+  const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("left");
 
   const syncDomFromDoc = useCallback(() => {
     const root = rootRef.current;
@@ -152,6 +153,13 @@ export function LiteraryEditor({
 
   const setLayout = (layout: LiteraryLayout) => {
     onChange({ ...docRef.current, layout });
+  };
+
+  const addImageBlock = () => {
+    const url = window.prompt("Paste an image URL");
+    if (!url?.trim()) return;
+    const next = [...docRef.current.blocks, { ...createBlock("image", ""), imageUrl: url.trim(), imageAlt: "Editorial image" }];
+    commitBlocks(next as DocBlock[]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>, index: number) => {
@@ -277,6 +285,7 @@ export function LiteraryEditor({
             </Button>
           </div>
           <div className="flex items-center gap-1 pl-1">
+            <Button size="icon" variant="ghost" className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={addImageBlock} title="Add image"><ImagePlus className="h-3 w-3" /></Button>
             <Button size="icon" variant="ghost" className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={() => applyKind("heading1")} title="Heading">
               <Heading1 className="h-3 w-3" />
             </Button>
@@ -290,13 +299,28 @@ export function LiteraryEditor({
         </div>
       )}
 
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Page view</span>
+        <span>A4 · 900-character guide</span>
+        <div className="ml-auto flex items-center gap-1">
+          <Button size="icon" variant={textAlign === "left" ? "secondary" : "ghost"} className="size-7" onClick={() => setTextAlign("left")} aria-label="Align left"><AlignLeft /></Button>
+          <Button size="icon" variant={textAlign === "center" ? "secondary" : "ghost"} className="size-7" onClick={() => setTextAlign("center")} aria-label="Align center"><AlignCenter /></Button>
+          <Button size="icon" variant={textAlign === "right" ? "secondary" : "ghost"} className="size-7" onClick={() => setTextAlign("right")} aria-label="Align right"><AlignRight /></Button>
+        </div>
+      </div>
       <div
         ref={rootRef}
-        className={cn("relative space-y-4 text-lg", layoutSurfaceClass(doc.layout))}
+        style={{ textAlign }}
+        className={cn("relative min-h-[900px] space-y-4 border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner", layoutSurfaceClass(doc.layout))}
         onMouseUp={updateBubble}
         onKeyUp={updateBubble}
       >
-        {doc.blocks.map((block, index) => (
+        {doc.blocks.map((block, index) => block.kind === "image" ? (
+          <figure key={block.id} data-block-id={block.id} className="my-8 break-inside-avoid rounded-lg border border-border bg-card p-3 text-left shadow-sm">
+            {block.imageUrl ? <img src={block.imageUrl} alt={block.imageAlt || "Editorial image"} className="max-h-[620px] w-full rounded object-contain" /> : <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">Image block</div>}
+            <figcaption className="mt-2 text-center text-xs text-muted-foreground">Editorial image · counts toward this page</figcaption>
+          </figure>
+        ) : (
           <div
             key={block.id}
             data-block-id={block.id}
