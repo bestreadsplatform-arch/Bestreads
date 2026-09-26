@@ -579,7 +579,11 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       if (code.length > 0 && code !== HOF_CODE)
         return { ok: false, error: "That secret access code is not valid." };
 
-      const { data: available } = await supabase.rpc("username_available", { _username: handle });
+      const { data: available, error: availabilityError } = await supabase.rpc("username_available", {
+        _username: handle,
+      });
+      if (availabilityError)
+        return { ok: false, error: "We could not check that username. Please try again." };
       if (available === false)
         return { ok: false, error: `@${handle} is already taken. Try another handle.` };
 
