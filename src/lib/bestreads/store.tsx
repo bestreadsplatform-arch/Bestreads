@@ -551,6 +551,18 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       .catch((e) => console.error("Error fetching revisions:", e));
   }, [user, refreshInbox, refreshDrafts]);
 
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`publication-coauthor-inbox:${user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "publication_coauthors", filter: `user_id=eq.${user.id}` }, () => {
+        void refreshInbox();
+        void refreshDrafts();
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [user, refreshInbox, refreshDrafts]);
+
   const signUp = useCallback(
     async ({ email, password, name, username, accessCode }: SignUpInput): Promise<AuthResult> => {
       const handle = username.replace(/^@/, "").trim().toLowerCase();

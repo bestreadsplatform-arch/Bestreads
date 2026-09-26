@@ -529,8 +529,8 @@ function Header() {
               inbox.map((inv) => (
                 <div key={inv.id} className="mb-2 rounded-md border border-border bg-card p-3 text-xs">
                   <p className="mb-2">
-                    <span className="font-semibold">User {inv.senderId}</span> invited you to co-author{" "}
-                    <span className="font-semibold italic">"{inv.bookTitle}"</span>.
+                    <span className="font-semibold">@{inv.senderUsername}</span> invited you as a <span className="font-semibold">helper</span> on{" "}
+                    <span className="font-semibold italic">&apos;{inv.bookTitle}&apos;</span>.
                   </p>
                   <div className="flex items-center gap-2">
                     <Button size="sm" variant="default" className="h-7 w-full text-xs" onClick={() => void acceptInvitation(inv.id)}>
