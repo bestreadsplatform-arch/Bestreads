@@ -608,7 +608,14 @@ export function BestreadsProvider({ children }: { children: ReactNode }) {
       }
 
       const { data: session } = await supabase.auth.getSession();
-      if (session.session?.user) await loadProfile(session.session.user);
+      if (!session.session?.user) {
+        return {
+          ok: false,
+          error:
+            "Your account was created, but Supabase is still waiting for email confirmation. In Supabase Auth settings, turn off Confirm email for testing, then try signing in.",
+        };
+      }
+      await loadProfile(session.session.user);
       return { ok: true };
     },
     [loadProfile],

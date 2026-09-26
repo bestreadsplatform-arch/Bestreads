@@ -53,7 +53,8 @@ export function Landing() {
   const [newHandle, setNewHandle] = useState("");
   const [code, setCode] = useState("");
 
-  const doSignIn = async () => {
+  const doSignIn = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
     if (busy) return;
     setBusy(true);
     try {
@@ -66,7 +67,8 @@ export function Landing() {
     }
   };
 
-  const doSignUp = async () => {
+  const doSignUp = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
     if (busy) return;
     setBusy(true);
     try {
@@ -170,7 +172,8 @@ export function Landing() {
                   <TabsTrigger value="signup">Sign up</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="signin" className="mt-5 space-y-4">
+                <TabsContent value="signin" className="mt-5">
+                  <form className="flex flex-col gap-4" onSubmit={doSignIn}>
                   <h2 className="font-display text-2xl font-semibold">Welcome back</h2>
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
@@ -202,13 +205,14 @@ export function Landing() {
                       </button>
                     </div>
                   </div>
-                  <Button className="w-full" onClick={doSignIn} disabled={busy}>
+                  <Button type="submit" className="w-full" disabled={busy}>
                     {busy ? "Opening…" : "Enter the library"}
                   </Button>
-
+                  </form>
                 </TabsContent>
 
-                <TabsContent value="signup" className="mt-5 space-y-4">
+                <TabsContent value="signup" className="mt-5">
+                  <form className="flex flex-col gap-4" onSubmit={doSignUp}>
                   <h2 className="font-display text-2xl font-semibold">Create your handle</h2>
                   <div className="space-y-2">
                     <Label htmlFor="su-email">Email</Label>
@@ -274,10 +278,10 @@ export function Landing() {
                       placeholder="Magazine passkey"
                     />
                   </div>
-                  <Button className="w-full" onClick={doSignUp} disabled={busy}>
+                  <Button type="submit" className="w-full" disabled={busy}>
                     {busy ? "Creating…" : "Join Bestreads"}
                   </Button>
-
+                  </form>
                 </TabsContent>
               </Tabs>
               <button
