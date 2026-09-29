@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { AlignCenter, AlignLeft, AlignRight, Heading1, Heading2, ImagePlus, Quote, Type } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Code2, Eraser, Heading1, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, Quote, Redo2, Strikethrough, Type, Underline, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -86,7 +86,10 @@ export function LiteraryEditor({
   docRef.current = doc;
   const [bubble, setBubble] = useState<BubblePos>(null);
   const [liveSel, setLiveSel] = useState<EditorSelection | null>(null);
-  const [textAlign, setTextAlign] = useState<"left" | "center" | "right">("left");
+  const [textAlign, setTextAlign] = useState<"left" | "center" | "right" | "justify">("left");
+  const [fontFamily, setFontFamily] = useState("Georgia");
+  const [fontSize, setFontSize] = useState("3");
+  const [lineHeight, setLineHeight] = useState("1.7");
 
   const syncDomFromDoc = useCallback(() => {
     const root = rootRef.current;
@@ -153,6 +156,24 @@ export function LiteraryEditor({
 
   const setLayout = (layout: LiteraryLayout) => {
     onChange({ ...docRef.current, layout });
+  };
+
+  const runCommand = (command: string, value?: string) => {
+    rootRef.current?.focus();
+    document.execCommand(command, false, value);
+    updateBubble();
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.dataset.blockId) handleInput(active.dataset.blockId);
+  };
+
+  const setSelectionAlignment = (alignment: "left" | "center" | "right" | "justify") => {
+    setTextAlign(alignment);
+    runCommand(`justify${alignment[0].toUpperCase()}${alignment.slice(1)}`);
+  };
+
+  const addLink = () => {
+    const url = window.prompt("Paste a link URL");
+    if (url?.trim()) runCommand("createLink", url.trim());
   };
 
   const addImageBlock = () => {
@@ -299,13 +320,30 @@ export function LiteraryEditor({
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">
         <span className="font-medium text-foreground">Page view</span>
         <span>A4 · 900-character guide</span>
-        <div className="ml-auto flex items-center gap-1">
-          <Button size="icon" variant={textAlign === "left" ? "secondary" : "ghost"} className="size-7" onClick={() => setTextAlign("left")} aria-label="Align left"><AlignLeft /></Button>
-          <Button size="icon" variant={textAlign === "center" ? "secondary" : "ghost"} className="size-7" onClick={() => setTextAlign("center")} aria-label="Align center"><AlignCenter /></Button>
-          <Button size="icon" variant={textAlign === "right" ? "secondary" : "ghost"} className="size-7" onClick={() => setTextAlign("right")} aria-label="Align right"><AlignRight /></Button>
+        <div className="flex flex-wrap items-center gap-1 border-l border-border pl-2">
+          <select aria-label="Font family" value={fontFamily} onChange={(e) => { setFontFamily(e.target.value); runCommand("fontName", e.target.value); }} className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"><option>Georgia</option><option>Times New Roman</option><option>Arial</option><option>Helvetica</option><option>Courier New</option><option>Verdana</option></select>
+          <select aria-label="Text size" value={fontSize} onChange={(e) => { setFontSize(e.target.value); runCommand("fontSize", e.target.value); }} className="h-7 w-16 rounded border border-border bg-background px-2 text-xs text-foreground"><option value="1">10</option><option value="2">12</option><option value="3">14</option><option value="4">18</option><option value="5">24</option><option value="6">32</option><option value="7">48</option></select>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("bold")} aria-label="Bold"><Bold /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("italic")} aria-label="Italic"><Italic /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("underline")} aria-label="Underline"><Underline /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("strikeThrough")} aria-label="Strikethrough"><Strikethrough /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("removeFormat")} aria-label="Clear formatting"><Eraser /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("insertUnorderedList")} aria-label="Bulleted list"><List /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("insertOrderedList")} aria-label="Numbered list"><ListOrdered /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={addLink} aria-label="Add link"><Link2 /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("undo")} aria-label="Undo"><Undo2 /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("redo")} aria-label="Redo"><Redo2 /></Button>
+          <Button size="icon" variant="ghost" className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => runCommand("formatBlock", "<pre>")} aria-label="Code block"><Code2 /></Button>
+        </div>
+        <div className="ml-auto flex items-center gap-1 border-l border-border pl-2">
+          <Button size="icon" variant={textAlign === "left" ? "secondary" : "ghost"} className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => setSelectionAlignment("left")} aria-label="Align left"><AlignLeft /></Button>
+          <Button size="icon" variant={textAlign === "center" ? "secondary" : "ghost"} className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => setSelectionAlignment("center")} aria-label="Align center"><AlignCenter /></Button>
+          <Button size="icon" variant={textAlign === "right" ? "secondary" : "ghost"} className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => setSelectionAlignment("right")} aria-label="Align right"><AlignRight /></Button>
+          <Button size="icon" variant={textAlign === "justify" ? "secondary" : "ghost"} className="size-7" onMouseDown={(e) => e.preventDefault()} onClick={() => setSelectionAlignment("justify")} aria-label="Justify"><AlignJustify /></Button>
+          <select aria-label="Line spacing" value={lineHeight} onChange={(e) => { setLineHeight(e.target.value); if (rootRef.current) rootRef.current.style.lineHeight = e.target.value; }} className="h-7 rounded border border-border bg-background px-2 text-xs text-foreground"><option value="1.15">1.15</option><option value="1.5">1.5</option><option value="1.7">1.7</option><option value="2">2.0</option><option value="2.5">2.5</option></select>
         </div>
       </div>
       <div

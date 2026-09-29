@@ -118,7 +118,7 @@ function ProChart({ book }: { book: Book }) {
 }
 
 export function Bookshelf() {
-  const { books, drafts, user, setView, deleteDraft, publishDraft, library } = useBestreads();
+  const { books, drafts, user, setView, openWorkspace, deleteDraft, publishDraft, library } = useBestreads();
   const published = books.filter((b) => b.authorId === user?.id && b.status === "published");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = published.find((b) => b.id === selectedId) ?? published[0] ?? null;
@@ -147,30 +147,23 @@ export function Bookshelf() {
         <h2 className="mb-3 text-xs font-semibold tracking-[0.2em] uppercase">Drafts</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {openDrafts.map((d) => (
-            <div key={d.id} className="flex gap-3 rounded-lg border border-border bg-card p-3">
-              <div className="w-12 shrink-0">
-                <BookCover title={d.title} cover={d.cover} image={d.coverImage} coauthors={d.coauthors} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-display truncate text-base font-semibold">{d.title}</p>
-                <p className="line-clamp-2 text-xs text-muted-foreground">{d.summary}</p>
-                <div className="mt-2 flex gap-1">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={() => {
-                      void publishDraft(d.id).then((res) => {
-                        if (res.ok) toast.success("Published to Bestreads");
-                        else toast.error(res.error ?? "Could not publish");
-                      });
-                    }}
-                  >
-                    <Upload className="size-3" /> Publish
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => deleteDraft(d.id)}>
-                    <Trash2 className="size-3" />
-                  </Button>
+            <div key={d.id} className="flex gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-accent/40">
+              <button type="button" className="flex min-w-0 flex-1 gap-3 text-left" onClick={() => openWorkspace(d)} aria-label={`Open draft ${d.title}`}>
+                <div className="w-12 shrink-0">
+                  <BookCover title={d.title} cover={d.cover} image={d.coverImage} coauthors={d.coauthors} />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-display truncate text-base font-semibold">{d.title}</p>
+                  <p className="line-clamp-2 text-xs text-muted-foreground">{d.summary || "Continue writing this draft"}</p>
+                </div>
+              </button>
+              <div className="flex shrink-0 flex-col gap-1">
+                <Button size="sm" variant="secondary" onClick={() => void publishDraft(d.id).then((res) => res.ok ? toast.success("Published to Bestreads") : toast.error(res.error ?? "Could not publish"))}>
+                  <Upload className="size-3" /> Publish
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => deleteDraft(d.id)} aria-label={`Delete ${d.title}`}>
+                  <Trash2 className="size-3" />
+                </Button>
               </div>
             </div>
           ))}
