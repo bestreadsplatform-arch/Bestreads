@@ -275,9 +275,12 @@ export function LiteraryEditor({
       <div
         ref={rootRef}
         style={{ textAlign, lineHeight }}
-        className={cn("relative min-h-[900px] border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [background-image:repeating-linear-gradient(to_bottom,transparent_0,transparent_759px,oklch(0.45_0.08_45_/_0.58)_759px,oklch(0.45_0.08_45_/_0.58)_761px)] [background-size:100%_760px]", layoutSurfaceClass(doc.layout))}
+        className={cn(
+          "relative h-[900px] overflow-x-auto overflow-y-hidden border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [column-fill:auto] [column-gap:3rem] [column-rule:1px_solid_oklch(0.45_0.08_45_/_0.22)] [column-width:680px]",
+          layoutSurfaceClass(doc.layout),
+        )}
       >
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[760px] border-t border-primary/20" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-[calc(50%+1.5rem)] border-l border-primary/20" />
         {doc.blocks.map((block, index) => block.kind === "image" ? (
           <figure key={block.id} data-block-id={block.id} className="my-8 break-inside-avoid rounded-lg border border-border bg-card p-3 text-left shadow-sm">
             {block.imageUrl ? <img src={block.imageUrl} alt={block.imageAlt || "Editorial image"} className="max-h-[620px] w-full rounded object-contain" /> : <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">Image block</div>}

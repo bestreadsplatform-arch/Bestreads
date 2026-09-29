@@ -81,7 +81,10 @@ export function ReadingModal() {
     >
       {/* Toolbar */}
       <header
-        className="flex shrink-0 items-center justify-between px-6 py-3"
+        className={cn(
+          "flex shrink-0 items-center justify-between px-6 py-3 transition-opacity",
+          bookOnly && "pointer-events-none absolute inset-x-0 top-0 z-10 opacity-0 hover:pointer-events-auto hover:opacity-100",
+        )}
         style={{ borderBottom: "1px solid oklch(0.88 0.02 85)", background: "oklch(0.99 0.005 85)" }}
       >
         <div className="flex items-center gap-4 min-w-0">
@@ -146,7 +149,7 @@ export function ReadingModal() {
 
       {/* Reading area */}
       <div className={cn("flex-1 overflow-y-auto", bookOnly && "bg-[#e8e2d8]")}>
-        <article className={cn("mx-auto px-6 py-10 transition-all", bookOnly ? "max-w-[1500px] py-14" : "max-w-[1180px]")}>
+        <article className={cn("mx-auto px-6 transition-all", bookOnly ? "max-w-[1680px] py-10" : "max-w-[1320px] py-10")}>
           {/* Title block */}
           <header className="mb-10 pb-8" style={{ borderBottom: "1px solid oklch(0.88 0.02 85)" }}>
             <h1
@@ -197,16 +200,19 @@ export function ReadingModal() {
             )}
           </header>
 
-          <div className="relative grid gap-5 md:grid-cols-2" style={{ perspective: "1800px" }}>
-            {currentPair.map((page, i) => (
-              <section key={`${pageIndex}-${i}`} className={cn("relative min-h-[60vh] rounded-sm border border-[#d9d0c2] bg-[#fffdf8] p-10 shadow-[0_20px_45px_-20px_rgba(40,24,12,0.55)] transition-transform duration-500 [transform-style:preserve-3d]", turning && (i === 0 ? "-rotate-y-6" : "rotate-y-6"))} style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: bookOnly ? "1.28rem" : "1.1rem", lineHeight: "1.9", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em" }}>
-                <div className="pointer-events-none absolute inset-y-0 left-1/2 w-12 -translate-x-1/2 bg-gradient-to-r from-transparent via-[#7d6242]/10 to-transparent" />
-                <div className="relative whitespace-pre-line">{page}</div>
-                <div className="absolute inset-x-10 bottom-10 border-t border-border/70 pt-3 text-center text-[0.7rem] tracking-[0.2em] text-muted-foreground">{pageIndex * 2 + i + 1}</div>
-              </section>
-            ))}
-            <Button variant="outline" size="icon" className="absolute -left-8 top-1/2 size-12 -translate-y-1/2 rounded-full bg-background shadow-sm" onClick={() => turnPage(-1)} disabled={pageIndex === 0 || turning} aria-label="Previous spread"><ArrowLeft /></Button>
-            <Button variant="outline" size="icon" className="absolute -right-8 top-1/2 size-12 -translate-y-1/2 rounded-full bg-background shadow-sm" onClick={() => turnPage(1)} disabled={pageIndex === pagePairs.length - 1 || turning} aria-label="Next spread"><ArrowRight /></Button>
+          <div className="relative mx-auto w-full max-w-[1320px] px-8" style={{ perspective: "1800px" }}>
+            <div className="relative grid min-h-[760px] grid-cols-2 overflow-hidden rounded-[0.35rem] border border-[#d9d0c2] bg-[#fffdf8] shadow-[0_28px_60px_-22px_rgba(40,24,12,0.62)] [transform-style:preserve-3d]">
+              {currentPair.map((page, i) => (
+                <section key={`${pageIndex}-${i}`} className={cn("relative min-h-[760px] overflow-hidden px-16 py-14 transition-transform duration-500 [transform-style:preserve-3d]", i === 0 ? "border-r border-[#d9d0c2]" : "", turning && (i === 0 ? "-rotate-y-6" : "rotate-y-6"))} style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: bookOnly ? "1.4rem" : "1.22rem", lineHeight: "1.85", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em", background: i === 0 ? "linear-gradient(100deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" : "linear-gradient(260deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" }}>
+                  <div className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-[#7d6242]/10 to-transparent" />
+                  <div className="relative whitespace-pre-line">{page}</div>
+                  <div className="absolute inset-x-16 bottom-12 border-t border-[#d9d0c2] pt-4 text-center text-[0.75rem] tracking-[0.2em] text-muted-foreground">{pageIndex * 2 + i + 1}</div>
+                </section>
+              ))}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 w-8 -translate-x-1/2 bg-gradient-to-r from-transparent via-[#6d5438]/15 to-transparent" />
+            </div>
+            <Button variant="outline" size="icon" className="absolute -left-1 top-1/2 size-12 -translate-y-1/2 rounded-full bg-background shadow-sm" onClick={() => turnPage(-1)} disabled={pageIndex === 0 || turning} aria-label="Previous spread"><ArrowLeft /></Button>
+            <Button variant="outline" size="icon" className="absolute -right-1 top-1/2 size-12 -translate-y-1/2 rounded-full bg-background shadow-sm" onClick={() => turnPage(1)} disabled={pageIndex === pagePairs.length - 1 || turning} aria-label="Next spread"><ArrowRight /></Button>
           </div>
           <div className="mt-5 flex items-center justify-center gap-3 text-xs text-muted-foreground"><span>Spread {pageIndex + 1} of {pagePairs.length}</span><span aria-hidden="true">·</span><span>Use the arrows to turn the page</span></div>
 
