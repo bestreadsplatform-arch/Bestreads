@@ -20,23 +20,23 @@ export function ReadingModal() {
     return () => window.removeEventListener("keydown", handler);
   }, [closeReading]);
 
-  if (!readingBook) return null;
-
   const book = readingBook;
-  const author = authorById(book.authorId);
-  const isUpvoted = upvoted.includes(book.id);
-  const isSaved = library.includes(book.id);
-
-  // Split body text into paragraphs
-  const paragraphs = (book.content || book.excerpt || "")
-    .split(/\n{2,}/)
-    .filter(Boolean);
+  const paragraphs = useMemo(
+    () => (book ? (book.content || book.excerpt || "").split(/\n{2,}/).filter(Boolean) : []),
+    [book],
+  );
   const pagePairs = useMemo(() => {
     const pages: string[][] = [];
     for (let i = 0; i < paragraphs.length; i += 2) pages.push(paragraphs.slice(i, i + 2));
     return pages.length ? pages : [["No content available for this text."]];
   }, [paragraphs]);
   const [pageIndex, setPageIndex] = useState(0);
+
+  if (!book) return null;
+
+  const author = authorById(book.authorId);
+  const isUpvoted = upvoted.includes(book.id);
+  const isSaved = library.includes(book.id);
   const currentPair = pagePairs[pageIndex] ?? pagePairs[0]!;
 
   return (

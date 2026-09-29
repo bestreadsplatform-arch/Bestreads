@@ -275,7 +275,7 @@ export function LiteraryEditor({
       <div
         ref={rootRef}
         style={{ textAlign }}
-        className={cn("relative min-h-[900px] space-y-4 border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [background-image:repeating-linear-gradient(to_bottom,transparent_0,transparent_899px,hsl(var(--primary)/0.28)_899px,hsl(var(--primary)/0.28)_901px)]", layoutSurfaceClass(doc.layout))}
+        className={cn("relative min-h-[900px] space-y-4 border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [background-image:repeating-linear-gradient(to_bottom,transparent_0,transparent_899px,oklch(0.45_0.08_45_/_0.42)_899px,oklch(0.45_0.08_45_/_0.42)_901px)] [background-size:100%_900px]", layoutSurfaceClass(doc.layout))}
       >
         {doc.blocks.map((block, index) => block.kind === "image" ? (
           <figure key={block.id} data-block-id={block.id} className="my-8 break-inside-avoid rounded-lg border border-border bg-card p-3 text-left shadow-sm">
