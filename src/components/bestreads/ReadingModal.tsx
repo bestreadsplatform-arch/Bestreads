@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, ArrowBigUp, ArrowLeft, ArrowRight, BookMarked } from "lucide-react";
+import { X, ArrowBigUp, ArrowLeft, ArrowRight, BookMarked, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -26,11 +26,43 @@ export function ReadingModal() {
     [book],
   );
   const pagePairs = useMemo(() => {
-    const pages: string[][] = [];
-    for (let i = 0; i < paragraphs.length; i += 2) pages.push(paragraphs.slice(i, i + 2));
-    return pages.length ? pages : [["No content available for this text."]];
+    const pageSize = 980;
+    const pages: string[] = [];
+    let current = "";
+    for (const paragraph of paragraphs) {
+      const next = current ? `${current}\n\n${paragraph}` : paragraph;
+      if (current && next.length > pageSize) {
+        pages.push(current);
+        current = paragraph;
+      } else {
+        current = next;
+      }
+    }
+    if (current) pages.push(current);
+    const safePages = pages.length ? pages : ["No content available for this text."];
+    if (safePages.length % 2) safePages.push("");
+    const pairs: string[][] = [];
+    for (let i = 0; i < safePages.length; i += 2) pairs.push(safePages.slice(i, i + 2));
+    return pairs;
   }, [paragraphs]);
   const [pageIndex, setPageIndex] = useState(0);
+  const [bookOnly, setBookOnly] = useState(false);
+  const [turning, setTurning] = useState(false);
+
+  useEffect(() => {
+    setPageIndex(0);
+  }, [book?.id]);
+
+  const turnPage = (direction: 1 | -1) => {
+    if (turning) return;
+    const next = Math.max(0, Math.min(pagePairs.length - 1, pageIndex + direction));
+    if (next === pageIndex) return;
+    setTurning(true);
+    window.setTimeout(() => {
+      setPageIndex(next);
+      setTurning(false);
+    }, 420);
+  };
 
   if (!book) return null;
 
@@ -90,6 +122,10 @@ export function ReadingModal() {
             <BookMarked className={cn("size-3.5", isSaved && "fill-current")} />
             {isSaved ? "Saved" : "Save for Later"}
           </button>
+          <Button variant="outline" size="sm" onClick={() => setBookOnly((value) => !value)} aria-label={bookOnly ? "Show reading controls" : "Book only mode"}>
+            {bookOnly ? <Minimize2 data-icon="inline-start" /> : <Maximize2 data-icon="inline-start" />}
+            {bookOnly ? "Exit book view" : "Book only"}
+          </Button>
           {book.buyLink && (
             <a
               href={book.buyLink}
@@ -109,8 +145,8 @@ export function ReadingModal() {
       </header>
 
       {/* Reading area */}
-      <div className="flex-1 overflow-y-auto">
-        <article className="mx-auto max-w-[680px] px-6 py-14">
+      <div className={cn("flex-1 overflow-y-auto", bookOnly && "bg-[#e8e2d8]")}>
+        <article className={cn("mx-auto px-6 py-10 transition-all", bookOnly ? "max-w-[1500px] py-14" : "max-w-[1180px]")}>
           {/* Title block */}
           <header className="mb-10 pb-8" style={{ borderBottom: "1px solid oklch(0.88 0.02 85)" }}>
             <h1
@@ -162,14 +198,15 @@ export function ReadingModal() {
           </header>
 
           <div className="relative grid gap-5 md:grid-cols-2" style={{ perspective: "1800px" }}>
-            {currentPair.map((para, i) => (
-              <section key={`${pageIndex}-${i}`} className="min-h-[32rem] rounded-sm border border-border/80 bg-[#fffdf8] p-8 shadow-[0_12px_30px_-18px_rgba(40,24,12,0.55)]" style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: "1.0625rem", lineHeight: "1.9", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em" }}>
-                <p>{para}</p>
-                <div className="mt-12 border-t border-border/70 pt-3 text-center text-[0.65rem] tracking-[0.2em] text-muted-foreground">{pageIndex * 2 + i + 1}</div>
+            {currentPair.map((page, i) => (
+              <section key={`${pageIndex}-${i}`} className={cn("relative min-h-[60vh] rounded-sm border border-[#d9d0c2] bg-[#fffdf8] p-10 shadow-[0_20px_45px_-20px_rgba(40,24,12,0.55)] transition-transform duration-500 [transform-style:preserve-3d]", turning && (i === 0 ? "-rotate-y-6" : "rotate-y-6"))} style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: bookOnly ? "1.28rem" : "1.1rem", lineHeight: "1.9", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em" }}>
+                <div className="pointer-events-none absolute inset-y-0 left-1/2 w-12 -translate-x-1/2 bg-gradient-to-r from-transparent via-[#7d6242]/10 to-transparent" />
+                <div className="relative whitespace-pre-line">{page}</div>
+                <div className="absolute inset-x-10 bottom-10 border-t border-border/70 pt-3 text-center text-[0.7rem] tracking-[0.2em] text-muted-foreground">{pageIndex * 2 + i + 1}</div>
               </section>
             ))}
-            <Button variant="outline" size="icon" className="absolute -left-5 top-1/2 rounded-full bg-background shadow-sm" onClick={() => setPageIndex((value) => Math.max(0, value - 1))} disabled={pageIndex === 0} aria-label="Previous spread"><ArrowLeft /></Button>
-            <Button variant="outline" size="icon" className="absolute -right-5 top-1/2 rounded-full bg-background shadow-sm" onClick={() => setPageIndex((value) => Math.min(pagePairs.length - 1, value + 1))} disabled={pageIndex === pagePairs.length - 1} aria-label="Next spread"><ArrowRight /></Button>
+            <Button variant="outline" size="icon" className="absolute -left-8 top-1/2 size-12 -translate-y-1/2 rounded-full bg-background shadow-sm" onClick={() => turnPage(-1)} disabled={pageIndex === 0 || turning} aria-label="Previous spread"><ArrowLeft /></Button>
+            <Button variant="outline" size="icon" className="absolute -right-8 top-1/2 size-12 -translate-y-1/2 rounded-full bg-background shadow-sm" onClick={() => turnPage(1)} disabled={pageIndex === pagePairs.length - 1 || turning} aria-label="Next spread"><ArrowRight /></Button>
           </div>
           <div className="mt-5 flex items-center justify-center gap-3 text-xs text-muted-foreground"><span>Spread {pageIndex + 1} of {pagePairs.length}</span><span aria-hidden="true">·</span><span>Use the arrows to turn the page</span></div>
 

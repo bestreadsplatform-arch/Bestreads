@@ -274,9 +274,10 @@ export function LiteraryEditor({
       </div>
       <div
         ref={rootRef}
-        style={{ textAlign }}
-        className={cn("relative min-h-[900px] space-y-4 border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [background-image:repeating-linear-gradient(to_bottom,transparent_0,transparent_899px,oklch(0.45_0.08_45_/_0.42)_899px,oklch(0.45_0.08_45_/_0.42)_901px)] [background-size:100%_900px]", layoutSurfaceClass(doc.layout))}
+        style={{ textAlign, lineHeight }}
+        className={cn("relative min-h-[900px] border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [background-image:repeating-linear-gradient(to_bottom,transparent_0,transparent_759px,oklch(0.45_0.08_45_/_0.58)_759px,oklch(0.45_0.08_45_/_0.58)_761px)] [background-size:100%_760px]", layoutSurfaceClass(doc.layout))}
       >
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-[760px] border-t border-primary/20" />
         {doc.blocks.map((block, index) => block.kind === "image" ? (
           <figure key={block.id} data-block-id={block.id} className="my-8 break-inside-avoid rounded-lg border border-border bg-card p-3 text-left shadow-sm">
             {block.imageUrl ? <img src={block.imageUrl} alt={block.imageAlt || "Editorial image"} className="max-h-[620px] w-full rounded object-contain" /> : <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">Image block</div>}
