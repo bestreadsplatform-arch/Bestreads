@@ -23,7 +23,8 @@ export function ReadingModal() {
   const book = readingBook;
   const pagePairs = useMemo(() => {
     const source = book ? (book.content || book.excerpt || "").trim() : "";
-    const pageSize = 900;
+    // The spread has a fixed physical height: reserve the footer and page number area.
+    const pageSize = 650;
     const pages: string[] = [];
     let rest = source;
     while (rest.length > pageSize) {
@@ -200,7 +201,7 @@ export function ReadingModal() {
               {currentPair.map((page, i) => (
                 <section key={`${pageIndex}-${i}`} className={cn("relative h-full min-h-0 overflow-hidden px-16 py-14 pb-24 transition-transform duration-500 [transform-style:preserve-3d]", i === 0 ? "border-r border-[#d9d0c2]" : "", turning && (i === 0 ? "-rotate-y-6" : "rotate-y-6"))} style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: bookOnly ? "1.4rem" : "1.22rem", lineHeight: "1.85", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em", background: i === 0 ? "linear-gradient(100deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" : "linear-gradient(260deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" }}>
                   <div className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-[#7d6242]/10 to-transparent" />
-                  <div className="relative whitespace-pre-line">{page}</div>
+                  <div className="relative max-h-[calc(100%-5rem)] overflow-hidden whitespace-pre-line">{page}</div>
                   <div className="absolute inset-x-16 bottom-12 border-t border-[#d9d0c2] pt-4 text-center text-[0.75rem] tracking-[0.2em] text-muted-foreground">{pageIndex * 2 + i + 1}</div>
                 </section>
               ))}
