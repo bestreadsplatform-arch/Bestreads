@@ -21,30 +21,25 @@ export function ReadingModal() {
   }, [closeReading]);
 
   const book = readingBook;
-  const paragraphs = useMemo(
-    () => (book ? (book.content || book.excerpt || "").split(/\n{2,}/).filter(Boolean) : []),
-    [book],
-  );
   const pagePairs = useMemo(() => {
-    const pageSize = 980;
+    const source = book ? (book.content || book.excerpt || "").trim() : "";
+    const pageSize = 900;
     const pages: string[] = [];
-    let current = "";
-    for (const paragraph of paragraphs) {
-      const next = current ? `${current}\n\n${paragraph}` : paragraph;
-      if (current && next.length > pageSize) {
-        pages.push(current);
-        current = paragraph;
-      } else {
-        current = next;
-      }
+    let rest = source;
+    while (rest.length > pageSize) {
+      let cut = rest.lastIndexOf(" ", pageSize);
+      const paragraphCut = rest.lastIndexOf("\n\n", pageSize);
+      if (paragraphCut > pageSize * 0.55) cut = paragraphCut;
+      if (cut < pageSize * 0.55) cut = pageSize;
+      pages.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
     }
-    if (current) pages.push(current);
-    const safePages = pages.length ? pages : ["No content available for this text."];
-    if (safePages.length % 2) safePages.push("");
+    if (rest || pages.length === 0) pages.push(rest || "No content available for this text.");
+    if (pages.length % 2) pages.push("");
     const pairs: string[][] = [];
-    for (let i = 0; i < safePages.length; i += 2) pairs.push(safePages.slice(i, i + 2));
+    for (let i = 0; i < pages.length; i += 2) pairs.push(pages.slice(i, i + 2));
     return pairs;
-  }, [paragraphs]);
+  }, [book]);
   const [pageIndex, setPageIndex] = useState(0);
   const [bookOnly, setBookOnly] = useState(false);
   const [turning, setTurning] = useState(false);
@@ -148,10 +143,10 @@ export function ReadingModal() {
       </header>
 
       {/* Reading area */}
-      <div className={cn("flex-1 overflow-y-auto", bookOnly && "bg-[#e8e2d8]")}>
-        <article className={cn("mx-auto px-6 transition-all", bookOnly ? "max-w-[1680px] py-10" : "max-w-[1320px] py-10")}>
+      <div className={cn("flex-1 overflow-hidden", bookOnly ? "bg-[#3f4653]" : "bg-[#f4f0e8]")}>
+        <article className={cn("mx-auto px-6", bookOnly ? "max-w-[1480px] py-8" : "max-w-[1320px] py-8")}>
           {/* Title block */}
-          <header className="mb-10 pb-8" style={{ borderBottom: "1px solid oklch(0.88 0.02 85)" }}>
+          <header className={cn("mb-8 pb-6", bookOnly && "hidden")} style={{ borderBottom: "1px solid oklch(0.88 0.02 85)" }}>
             <h1
               className="text-4xl leading-tight tracking-tight"
               style={{
@@ -200,10 +195,10 @@ export function ReadingModal() {
             )}
           </header>
 
-          <div className="relative mx-auto w-full max-w-[1320px] px-8" style={{ perspective: "1800px" }}>
-            <div className="relative grid min-h-[760px] grid-cols-2 overflow-hidden rounded-[0.35rem] border border-[#d9d0c2] bg-[#fffdf8] shadow-[0_28px_60px_-22px_rgba(40,24,12,0.62)] [transform-style:preserve-3d]">
+          <div className={cn("relative mx-auto w-full px-8", bookOnly ? "max-w-[1400px]" : "max-w-[1240px]")} style={{ perspective: "1800px" }}>
+            <div className="relative grid h-[min(760px,calc(100vh-170px))] min-h-[620px] grid-cols-2 overflow-hidden rounded-[0.35rem] border border-[#d9d0c2] bg-[#fffdf8] shadow-[0_28px_60px_-22px_rgba(40,24,12,0.62)] [transform-style:preserve-3d]">
               {currentPair.map((page, i) => (
-                <section key={`${pageIndex}-${i}`} className={cn("relative min-h-[760px] overflow-hidden px-16 py-14 transition-transform duration-500 [transform-style:preserve-3d]", i === 0 ? "border-r border-[#d9d0c2]" : "", turning && (i === 0 ? "-rotate-y-6" : "rotate-y-6"))} style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: bookOnly ? "1.4rem" : "1.22rem", lineHeight: "1.85", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em", background: i === 0 ? "linear-gradient(100deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" : "linear-gradient(260deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" }}>
+                <section key={`${pageIndex}-${i}`} className={cn("relative h-full min-h-0 overflow-hidden px-16 py-14 pb-24 transition-transform duration-500 [transform-style:preserve-3d]", i === 0 ? "border-r border-[#d9d0c2]" : "", turning && (i === 0 ? "-rotate-y-6" : "rotate-y-6"))} style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: bookOnly ? "1.4rem" : "1.22rem", lineHeight: "1.85", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em", background: i === 0 ? "linear-gradient(100deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" : "linear-gradient(260deg, #fffdf8 0%, #fffdf8 92%, #eee5d8 100%)" }}>
                   <div className="pointer-events-none absolute inset-y-0 left-0 w-14 bg-gradient-to-r from-[#7d6242]/10 to-transparent" />
                   <div className="relative whitespace-pre-line">{page}</div>
                   <div className="absolute inset-x-16 bottom-12 border-t border-[#d9d0c2] pt-4 text-center text-[0.75rem] tracking-[0.2em] text-muted-foreground">{pageIndex * 2 + i + 1}</div>
@@ -218,7 +213,7 @@ export function ReadingModal() {
 
           {/* Footer */}
           <footer
-            className="mt-16 pt-8 text-center text-xs text-muted-foreground"
+            className={cn("mt-8 pt-6 text-center text-xs text-muted-foreground", bookOnly && "hidden")}
             style={{ borderTop: "1px solid oklch(0.88 0.02 85)" }}
           >
             <p>

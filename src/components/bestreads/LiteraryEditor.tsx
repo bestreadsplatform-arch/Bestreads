@@ -276,11 +276,14 @@ export function LiteraryEditor({
         ref={rootRef}
         style={{ textAlign, lineHeight }}
         className={cn(
-          "relative h-[900px] overflow-x-auto overflow-y-hidden border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [column-fill:auto] [column-gap:3rem] [column-rule:1px_solid_oklch(0.45_0.08_45_/_0.22)] [column-width:680px]",
+          "relative h-[900px] overflow-hidden border border-border bg-background px-10 py-8 pb-20 text-lg shadow-inner",
           layoutSurfaceClass(doc.layout),
         )}
       >
-        <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-[calc(50%+1.5rem)] border-l border-primary/20" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-10 bottom-14 border-t border-dashed border-primary/60" />
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-10 bottom-5 flex items-center justify-center text-[11px] tracking-[0.2em] text-muted-foreground">
+          PAGE 1 · CONTINUE ON NEXT PAGE
+        </div>
         {doc.blocks.map((block, index) => block.kind === "image" ? (
           <figure key={block.id} data-block-id={block.id} className="my-8 break-inside-avoid rounded-lg border border-border bg-card p-3 text-left shadow-sm">
             {block.imageUrl ? <img src={block.imageUrl} alt={block.imageAlt || "Editorial image"} className="max-h-[620px] w-full rounded object-contain" /> : <div className="flex min-h-40 items-center justify-center text-sm text-muted-foreground">Image block</div>}
