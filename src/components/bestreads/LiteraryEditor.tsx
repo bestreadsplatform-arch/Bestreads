@@ -1,9 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Code2, Eraser, Heading1, Heading2, ImagePlus, Italic, Link2, List, ListOrdered, Quote, Redo2, Strikethrough, Type, Underline, Undo2 } from "lucide-react";
+import { AlignCenter, AlignJustify, AlignLeft, AlignRight, Bold, Code2, Eraser, ImagePlus, Italic, Link2, List, ListOrdered, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
-  applyKindToSelection,
   createBlock,
   type BlockKind,
   type DocBlock,
@@ -13,8 +12,6 @@ import {
 } from "@/lib/bestreads/document";
 import { blockClass, layoutSurfaceClass } from "./LiteraryBody";
 import { cn } from "@/lib/utils";
-
-type BubblePos = { top: number; left: number } | null;
 
 function closestBlockEl(node: Node | null, root: HTMLElement): HTMLElement | null {
   let current: Node | null = node;
@@ -84,8 +81,6 @@ export function LiteraryEditor({
   const rootRef = useRef<HTMLDivElement>(null);
   const docRef = useRef(doc);
   docRef.current = doc;
-  const [bubble, setBubble] = useState<BubblePos>(null);
-  const [liveSel, setLiveSel] = useState<EditorSelection | null>(null);
   const [textAlign, setTextAlign] = useState<"left" | "center" | "right" | "justify">("left");
   const [fontFamily, setFontFamily] = useState("Georgia");
   const [fontSize, setFontSize] = useState("3");
@@ -104,30 +99,6 @@ export function LiteraryEditor({
     syncDomFromDoc();
   }, [hydrateKey, doc.blocks.length, syncDomFromDoc]);
 
-  const updateBubble = useCallback(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-      setBubble(null);
-      setLiveSel(null);
-      return;
-    }
-    const snapshot = readSelection(root, docRef.current.blocks);
-    if (!snapshot) {
-      setBubble(null);
-      setLiveSel(null);
-      return;
-    }
-    const rect = sel.getRangeAt(0).getBoundingClientRect();
-    const rootRect = root.getBoundingClientRect();
-    setLiveSel(snapshot);
-    setBubble({
-      top: Math.max(8, rect.top - rootRect.top - 44),
-      left: Math.min(root.clientWidth - 220, Math.max(8, rect.left - rootRect.left)),
-    });
-  }, []);
-
   const commitBlocks = useCallback(
     (blocks: DocBlock[], layout?: LiteraryLayout) => {
       onChange({ layout: layout ?? docRef.current.layout, blocks });
@@ -145,23 +116,9 @@ export function LiteraryEditor({
     commitBlocks(blocks);
   };
 
-  const applyKind = (kind: BlockKind) => {
-    const root = rootRef.current;
-    if (!root) return;
-    const sel = liveSel ?? readSelection(root, docRef.current.blocks);
-    const next = applyKindToSelection(docRef.current.blocks, sel, kind);
-    commitBlocks(next);
-    setBubble(null);
-  };
-
-  const setLayout = (layout: LiteraryLayout) => {
-    onChange({ ...docRef.current, layout });
-  };
-
   const runCommand = (command: string, value?: string) => {
     rootRef.current?.focus();
     document.execCommand(command, false, value);
-    updateBubble();
     const active = document.activeElement;
     if (active instanceof HTMLElement && active.dataset.blockId) handleInput(active.dataset.blockId);
   };
@@ -289,37 +246,6 @@ export function LiteraryEditor({
 
   return (
     <div className="relative min-h-[840px] p-10">
-      {bubble && liveSel && (
-        <div
-          className="absolute z-20 flex items-center gap-1 rounded-md border border-border bg-card p-1 shadow-lg"
-          style={{ top: bubble.top, left: bubble.left }}
-        >
-          <div className="flex items-center gap-1 border-r border-border pr-2">
-            <Button size="icon" variant={doc.layout === "serif" ? "secondary" : "ghost"} className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={() => setLayout("serif")} title="Classic Serif Novel">
-              <Type className="h-3 w-3" />
-            </Button>
-            <Button size="icon" variant={doc.layout === "poetry" ? "secondary" : "ghost"} className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={() => setLayout("poetry")} title="Sinuous Poetry">
-              <Type className="h-3 w-3 opacity-70" />
-            </Button>
-            <Button size="icon" variant={doc.layout === "modern" ? "secondary" : "ghost"} className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={() => setLayout("modern")} title="Modernist Essay">
-              <Type className="h-3 w-3 font-sans" />
-            </Button>
-          </div>
-          <div className="flex items-center gap-1 pl-1">
-            <Button size="icon" variant="ghost" className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={addImageBlock} title="Add image"><ImagePlus className="h-3 w-3" /></Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={() => applyKind("heading1")} title="Heading">
-              <Heading1 className="h-3 w-3" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={() => applyKind("heading2")} title="Subheading">
-              <Heading2 className="h-3 w-3" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onMouseDown={(e) => e.preventDefault()} onClick={() => applyKind("quote")} title="Blockquote">
-              <Quote className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      )}
-
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">
         <span className="font-medium text-foreground">Page view</span>
         <span>A4 · 900-character guide</span>
@@ -349,9 +275,7 @@ export function LiteraryEditor({
       <div
         ref={rootRef}
         style={{ textAlign }}
-        className={cn("relative min-h-[900px] space-y-4 border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner", layoutSurfaceClass(doc.layout))}
-        onMouseUp={updateBubble}
-        onKeyUp={updateBubble}
+        className={cn("relative min-h-[900px] space-y-4 border-x-2 border-dashed border-primary/30 bg-background px-10 py-8 text-lg shadow-inner [background-image:repeating-linear-gradient(to_bottom,transparent_0,transparent_899px,hsl(var(--primary)/0.28)_899px,hsl(var(--primary)/0.28)_901px)]", layoutSurfaceClass(doc.layout))}
       >
         {doc.blocks.map((block, index) => block.kind === "image" ? (
           <figure key={block.id} data-block-id={block.id} className="my-8 break-inside-avoid rounded-lg border border-border bg-card p-3 text-left shadow-sm">

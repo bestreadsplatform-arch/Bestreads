@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { X, ArrowBigUp, BookMarked } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { X, ArrowBigUp, ArrowLeft, ArrowRight, BookMarked } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,13 @@ export function ReadingModal() {
   const paragraphs = (book.content || book.excerpt || "")
     .split(/\n{2,}/)
     .filter(Boolean);
+  const pagePairs = useMemo(() => {
+    const pages: string[][] = [];
+    for (let i = 0; i < paragraphs.length; i += 2) pages.push(paragraphs.slice(i, i + 2));
+    return pages.length ? pages : [["No content available for this text."]];
+  }, [paragraphs]);
+  const [pageIndex, setPageIndex] = useState(0);
+  const currentPair = pagePairs[pageIndex] ?? pagePairs[0]!;
 
   return (
     <div
@@ -154,25 +161,17 @@ export function ReadingModal() {
             )}
           </header>
 
-          {/* Body text — Serif, generous line-height */}
-          <div
-            className="space-y-6"
-            style={{
-              fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif",
-              fontSize: "1.0625rem",
-              lineHeight: "1.9",
-              color: "oklch(0.2 0.02 60)",
-              wordSpacing: "0.025em",
-            }}
-          >
-            {paragraphs.length > 0 ? (
-              paragraphs.map((para, i) => <p key={i}>{para}</p>)
-            ) : (
-              <p className="italic text-muted-foreground">
-                No content available for this text.
-              </p>
-            )}
+          <div className="relative grid gap-5 md:grid-cols-2" style={{ perspective: "1800px" }}>
+            {currentPair.map((para, i) => (
+              <section key={`${pageIndex}-${i}`} className="min-h-[32rem] rounded-sm border border-border/80 bg-[#fffdf8] p-8 shadow-[0_12px_30px_-18px_rgba(40,24,12,0.55)]" style={{ fontFamily: "'Georgia', 'Palatino Linotype', 'Times New Roman', serif", fontSize: "1.0625rem", lineHeight: "1.9", color: "oklch(0.2 0.02 60)", wordSpacing: "0.025em" }}>
+                <p>{para}</p>
+                <div className="mt-12 border-t border-border/70 pt-3 text-center text-[0.65rem] tracking-[0.2em] text-muted-foreground">{pageIndex * 2 + i + 1}</div>
+              </section>
+            ))}
+            <Button variant="outline" size="icon" className="absolute -left-5 top-1/2 rounded-full bg-background shadow-sm" onClick={() => setPageIndex((value) => Math.max(0, value - 1))} disabled={pageIndex === 0} aria-label="Previous spread"><ArrowLeft /></Button>
+            <Button variant="outline" size="icon" className="absolute -right-5 top-1/2 rounded-full bg-background shadow-sm" onClick={() => setPageIndex((value) => Math.min(pagePairs.length - 1, value + 1))} disabled={pageIndex === pagePairs.length - 1} aria-label="Next spread"><ArrowRight /></Button>
           </div>
+          <div className="mt-5 flex items-center justify-center gap-3 text-xs text-muted-foreground"><span>Spread {pageIndex + 1} of {pagePairs.length}</span><span aria-hidden="true">·</span><span>Use the arrows to turn the page</span></div>
 
           {/* Footer */}
           <footer
